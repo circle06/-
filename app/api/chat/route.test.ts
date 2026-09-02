@@ -68,10 +68,50 @@ describe("POST /api/chat", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "CLIENT_CLOSED", requestId: "req-cancel" } });
   });
 
-  it("rejects stream mode because SSE is intentionally out of scope", async () => {
-    const post = createChatHandler({ requestIdFactory: () => "req-stream" });
+  it("returns the unified SSE events for a successful mock stream", async () => {
+    const post = createChatHandler({ requestIdFactory: () => "req-sse" });
     const response = await post(request({ ...validBody, stream: true }));
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST", requestId: "req-stream" } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(response.headers.get("cache-control")).toContain("no-cache");
+    const body = await response.text();
+    expect(body).toContain("event: message_start");
+    expect(body).toContain("event: message_delta");
+    expect(body).toContain("event: message_end");
+    expect(body).not.toContain("event: start");
+    expect(body).not.toContain("event: done");
+  });
+
+  it("emits a safe SSE error event for a provider error", async () => {
+    const registry = registryWith("openai", new MockProvider("openai", { error: "private stream detail" }));
+    const post = createChatHandler({ registry, requestIdFactory: () => "req-sse-error" });
+    const response = await post(request({ ...validBody, stream: true }));
+    const body = await response.text();
+    expect(body).toContain("event: error");
+    expect(body).toContain('"code":"UPSTREAM_UNAVAILABLE"');
+    expect(body).not.toContain("private stream detail");
+  });
+
+  it("emits a timeout SSE error and closes the stream", async () => {
+    const registry = registryWith("deepseek", new MockProvider("deepseek", { delayMs: 100 }));
+    const post = createChatHandler({ registry, timeoutMs: 10, requestIdFactory: () => "req-sse-timeout" });
+    const response = await post(request({ ...validBody, provider: "deepseek", model: "deepseek-chat", stream: true }));
+    const body = await response.text();
+    expect(body).toContain("event: error");
+    expect(body).toContain('"code":"UPSTREAM_TIMEOUT"');
+    expect(body).not.toContain("event: message_end");
+  });
+
+  it("closes without a terminal success event when the client cancels", async () => {
+    const controller = new AbortController();
+    const post = createChatHandler({ requestIdFactory: () => "req-sse-cancel" });
+    const response = await post(request({ ...validBody, stream: true }, controller.signal));
+    const reader = response.body!.getReader();
+    const first = await reader.read();
+    expect(new TextDecoder().decode(first.value)).toContain("message_start");
+    controller.abort();
+    const rest = await reader.read();
+    expect(rest.done).toBe(true);
+    await reader.cancel();
   });
 });

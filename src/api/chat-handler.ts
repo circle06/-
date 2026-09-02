@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { RequestValidationError, validateChatRequest } from "@/domain/request-validation";
 import { MockProviderError } from "@/providers/mock-provider";
 import { ProviderRegistryError, providerRegistry, type ProviderRegistry } from "@/providers/registry";
+import type { NormalizedStreamEvent } from "@/domain/provider";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 type ChatErrorCode = "INVALID_REQUEST" | "PROVIDER_NOT_ALLOWED" | "MODEL_NOT_ALLOWED" | "UPSTREAM_UNAVAILABLE" | "UPSTREAM_TIMEOUT" | "CLIENT_CLOSED" | "INTERNAL_ERROR";
@@ -42,19 +43,77 @@ async function callWithControls(request: Request, provider: ReturnType<ProviderR
   }
 }
 
+function sse(name: string, data: unknown): string {
+  return `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function streamEvent(event: NormalizedStreamEvent, requestId: string): { name: string; data: unknown } {
+  if (event.type === "start") return { name: "message_start", data: { requestId, provider: event.provider, model: event.model } };
+  if (event.type === "delta") return { name: "message_delta", data: { text: event.text } };
+  if (event.type === "usage") return { name: "message_delta", data: { usage: event.usage } };
+  if (event.type === "done") return { name: "message_end", data: { finishReason: event.finishReason } };
+  return { name: "error", data: { requestId, code: event.code, message: event.message } };
+}
+
+function streamResponse(request: Request, provider: ReturnType<ProviderRegistry["getProvider"]>, normalizedRequest: Parameters<ReturnType<ProviderRegistry["getProvider"]>["stream"]>[0], requestId: string, timeoutMs: number): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const abortController = new AbortController();
+      let clientClosed = request.signal.aborted;
+      let timedOut = false;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let abortReject: ((error: DOMException) => void) | undefined;
+      const onAbort = () => { clientClosed = true; abortController.abort(request.signal.reason); abortReject?.(new DOMException("Request aborted", "AbortError")); };
+      request.signal.addEventListener("abort", onAbort, { once: true });
+      const abortPromise = new Promise<never>((_, reject) => { abortReject = reject; if (request.signal.aborted) onAbort(); });
+      const timeoutPromise = new Promise<never>((_, reject) => { timeoutId = setTimeout(() => { timedOut = true; abortController.abort(new Error("Provider timeout")); reject(new Error("Provider timeout")); }, timeoutMs); });
+
+      void (async () => {
+        let ended = false;
+        let usage: unknown;
+        try {
+          const iterator = provider.stream(normalizedRequest, { requestId, signal: abortController.signal, timeoutMs })[Symbol.asyncIterator]();
+          while (!ended) {
+            const result = await Promise.race([iterator.next(), timeoutPromise, abortPromise]);
+            if (clientClosed || timedOut) break;
+            if (result.done) break;
+            if (result.value.type === "usage") usage = result.value.usage;
+            const mapped = streamEvent(result.value, requestId);
+            if (mapped.name === "message_end" && usage) mapped.data = { ...mapped.data as object, usage };
+            controller.enqueue(encoder.encode(sse(mapped.name, mapped.data)));
+            if (mapped.name === "message_end" || mapped.name === "error") ended = true;
+          }
+        } catch (error) {
+          if (!clientClosed) {
+            const mapped = classifyError(error, timedOut, clientClosed);
+            controller.enqueue(encoder.encode(sse("error", { requestId, code: mapped.code, message: mapped.message })));
+          }
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId);
+          request.signal.removeEventListener("abort", onAbort);
+          controller.close();
+        }
+      })();
+    },
+  });
+  return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" } });
+}
+
 export interface ChatHandlerOptions { registry?: ProviderRegistry; timeoutMs?: number; requestIdFactory?: () => string }
 
 export function createChatHandler(options: ChatHandlerOptions = {}) {
   const registry = options.registry ?? providerRegistry;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const requestIdFactory = options.requestIdFactory ?? (() => crypto.randomUUID());
-  return async function handleChat(request: Request): Promise<NextResponse> {
+  return async function handleChat(request: Request): Promise<Response> {
     const requestId = requestIdFactory();
     if (request.signal.aborted) return errorResponse(requestId, { status: 499, code: "CLIENT_CLOSED", message: "客户端已取消请求。" });
     try {
       const validated = validateChatRequest(await request.json(), registry);
-      if (validated.stream) throw new RequestValidationError("Streaming chat is not available yet.");
-      const result = await callWithControls(request, registry.getProvider(validated.provider), validated.request, requestId, timeoutMs);
+      const provider = registry.getProvider(validated.provider);
+      if (validated.stream) return streamResponse(request, provider, validated.request, requestId, timeoutMs);
+      const result = await callWithControls(request, provider, validated.request, requestId, timeoutMs);
       if ("error" in result) {
         const providerError = result.error instanceof Error ? result.error : new Error("Provider call failed.");
         throw Object.assign(providerError, { __timedOut: result.timedOut, __clientClosed: result.clientClosed });
