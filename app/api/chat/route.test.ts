@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { providerConfigs } from "@/providers/config";
 import { providerIds } from "@/domain/provider";
 import { MockProvider } from "@/providers/mock-provider";
 import { ProviderRegistry } from "@/providers/registry";
 import { createChatHandler } from "@/api/chat-handler";
+import { ProviderFactory } from "@/providers/provider-factory";
 
 function registryWith(providerId: (typeof providerIds)[number], provider: MockProvider): ProviderRegistry {
   const providers = new Map(providerIds.map((id) => [id, new MockProvider(id)]));
@@ -32,6 +33,39 @@ describe("POST /api/chat", () => {
     const response = await post(request(validBody));
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ requestId: "req-success", provider: "openai", model: "gpt-4o-mini", message: { role: "assistant" }, finishReason: "stop" });
+  });
+
+  it("uses the live factory with an injected fetcher and returns configuration errors without a key", async () => {
+    const factory = new ProviderFactory({ mode: "live", fetcher: vi.fn() });
+    const post = createChatHandler({ factory, requestIdFactory: () => "req-live-config" });
+    const response = await post(request(validBody));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROVIDER_NOT_CONFIGURED", requestId: "req-live-config" } });
+  });
+
+  it("routes a live non-stream request through an adapter using mock fetch", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-openai-key");
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: "live mock reply" }, finish_reason: "stop" }] }), { status: 200 }));
+    const factory = new ProviderFactory({ mode: "live", fetcher });
+    const post = createChatHandler({ factory, requestIdFactory: () => "req-live-chat" });
+    const response = await post(request(validBody));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ requestId: "req-live-chat", provider: "openai", message: { content: "live mock reply" } });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("routes a live stream through an adapter using mock fetch", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-openai-key");
+    const fetcher = vi.fn(async () => new Response('data: {"choices":[{"delta":{"content":"live"}}]}\n\ndata: [DONE]\n\n', { status: 200 }));
+    const factory = new ProviderFactory({ mode: "live", fetcher });
+    const post = createChatHandler({ factory, requestIdFactory: () => "req-live-sse" });
+    const response = await post(request({ ...validBody, stream: true }));
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body).toContain('event: message_delta');
+    expect(body).toContain('"text":"live"');
+    expect(body).toContain('event: message_end');
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it("returns a unified parameter error and rejects sensitive fields", async () => {

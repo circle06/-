@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { RequestValidationError, validateChatRequest } from "@/domain/request-validation";
 import { MockProviderError } from "@/providers/mock-provider";
+import { ProviderAdapterError } from "@/providers/adapters/errors";
 import { ProviderRegistryError, providerRegistry, type ProviderRegistry } from "@/providers/registry";
+import { ProviderFactory, providerFactory } from "@/providers/provider-factory";
 import type { NormalizedStreamEvent } from "@/domain/provider";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
-type ChatErrorCode = "INVALID_REQUEST" | "PROVIDER_NOT_ALLOWED" | "MODEL_NOT_ALLOWED" | "UPSTREAM_UNAVAILABLE" | "UPSTREAM_TIMEOUT" | "CLIENT_CLOSED" | "INTERNAL_ERROR";
+type ChatErrorCode = "INVALID_REQUEST" | "PROVIDER_NOT_ALLOWED" | "MODEL_NOT_ALLOWED" | "PROVIDER_NOT_CONFIGURED" | "UPSTREAM_AUTH_ERROR" | "UPSTREAM_BAD_REQUEST" | "UPSTREAM_UNAVAILABLE" | "UPSTREAM_TIMEOUT" | "CLIENT_CLOSED" | "INTERNAL_ERROR";
 interface ChatErrorResponse { status: number; code: ChatErrorCode; message: string }
 
 function errorResponse(requestId: string, error: ChatErrorResponse): NextResponse {
@@ -18,6 +20,14 @@ function classifyError(error: unknown, timedOut: boolean, clientClosed: boolean)
   if (error instanceof RequestValidationError) return { status: 400, code: error.code, message: error.message };
   if (error instanceof ProviderRegistryError) return { status: 400, code: error.code, message: error.message };
   if (error instanceof MockProviderError) return error.code === "UPSTREAM_TIMEOUT" ? { status: 504, code: "UPSTREAM_TIMEOUT", message: "上游响应超时。" } : { status: 502, code: "UPSTREAM_UNAVAILABLE", message: "上游服务暂时不可用。" };
+  if (error instanceof ProviderAdapterError) {
+    if (error.code === "PROVIDER_NOT_CONFIGURED") return { status: 503, code: error.code, message: "Provider 尚未配置。" };
+    if (error.code === "UPSTREAM_AUTH_ERROR") return { status: 502, code: error.code, message: "上游鉴权失败。" };
+    if (error.code === "UPSTREAM_BAD_REQUEST") return { status: 502, code: error.code, message: "上游拒绝了请求。" };
+    if (error.code === "UPSTREAM_TIMEOUT") return { status: 504, code: error.code, message: "上游响应超时。" };
+    if (error.code === "CLIENT_CLOSED") return { status: 499, code: error.code, message: "客户端已取消请求。" };
+    return { status: 502, code: "UPSTREAM_UNAVAILABLE", message: "上游服务暂时不可用。" };
+  }
   if (error instanceof DOMException && error.name === "AbortError") return { status: 499, code: "CLIENT_CLOSED", message: "客户端已取消请求。" };
   return { status: 502, code: "UPSTREAM_UNAVAILABLE", message: "上游服务暂时不可用。" };
 }
@@ -100,10 +110,11 @@ function streamResponse(request: Request, provider: ReturnType<ProviderRegistry[
   return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" } });
 }
 
-export interface ChatHandlerOptions { registry?: ProviderRegistry; timeoutMs?: number; requestIdFactory?: () => string }
+export interface ChatHandlerOptions { registry?: ProviderRegistry; factory?: ProviderFactory; timeoutMs?: number; requestIdFactory?: () => string }
 
 export function createChatHandler(options: ChatHandlerOptions = {}) {
-  const registry = options.registry ?? providerRegistry;
+  const factory = options.factory ?? providerFactory;
+  const registry = options.registry ?? factory.getRegistry() ?? providerRegistry;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const requestIdFactory = options.requestIdFactory ?? (() => crypto.randomUUID());
   return async function handleChat(request: Request): Promise<Response> {
@@ -111,7 +122,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
     if (request.signal.aborted) return errorResponse(requestId, { status: 499, code: "CLIENT_CLOSED", message: "客户端已取消请求。" });
     try {
       const validated = validateChatRequest(await request.json(), registry);
-      const provider = registry.getProvider(validated.provider);
+      const provider = options.registry ? registry.getProvider(validated.provider) : factory.getProvider(validated.provider);
       if (validated.stream) return streamResponse(request, provider, validated.request, requestId, timeoutMs);
       const result = await callWithControls(request, provider, validated.request, requestId, timeoutMs);
       if ("error" in result) {
