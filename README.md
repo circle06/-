@@ -6,7 +6,11 @@
 
 ## 当前状态
 
-当前完成阶段一：需求分析、架构设计、UI 交互设计、API 契约、安全设计和验收标准。此阶段没有开始业务编码，没有安装依赖、下载文件或访问 GitHub。
+阶段一设计文档已经完成。当前 `phase/2-mvp` 已实现 Next.js 基础应用、Provider Registry、Mock/live Provider Factory、非流式和 SSE 聊天 API、基础聊天页面、本地会话与自定义提示词、服务端内置提示词、生成参数以及安全 Markdown 渲染。阶段三安全加固和 Docker/amd64 交付尚未完成。
+
+## 用户手册
+
+安装、mock/live 启动、聊天操作、本地数据边界和常见错误请参阅 [阶段二用户使用手册](docs/user-guide.md)。
 
 ## 目录说明
 
@@ -16,6 +20,7 @@
 - `docs/api-contract.md`：HTTP/SSE 接口及参数限制。
 - `docs/security-design.md`：密钥、SSRF、CORS、限流、超时、Docker 等安全设计。
 - `docs/acceptance-criteria.md`：阶段一至三可测试验收标准。
+- `docs/user-guide.md`：阶段二安装、运行和网页功能使用说明。
 
 ## 技术路线与数据边界
 
