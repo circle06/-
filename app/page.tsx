@@ -2,6 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BuiltInPrompt } from "@/prompts/built-in-prompts";
+import {
+  DEFAULT_MAX_TOKENS,
+  DEFAULT_TEMPERATURE,
+  MAX_MAX_TOKENS,
+  MAX_TEMPERATURE,
+  MIN_MAX_TOKENS,
+  MIN_TEMPERATURE,
+  buildPageChatRequest,
+  validMaxTokens,
+  validTemperature,
+  type PageChatRequest,
+} from "@/ui/chat-settings";
 import { parseSseText, type ParsedSseEvent } from "@/ui/chat-sse";
 import {
   deleteChatSession,
@@ -24,17 +36,12 @@ import {
   promptContentForSelection,
   type PromptSelection,
 } from "@/ui/prompt-selection";
+import { SafeMarkdown } from "@/ui/safe-markdown";
 
 interface PageProvider {
   id: string;
   name: string;
   models: Array<{ id: string; name: string }>;
-}
-
-interface ChatRequest {
-  provider: string;
-  model: string;
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 class ChatStreamError extends Error {
@@ -75,11 +82,13 @@ export default function HomePage() {
   const [promptName, setPromptName] = useState("");
   const [promptContent, setPromptContent] = useState("");
   const [input, setInput] = useState("");
+  const [temperature, setTemperature] = useState(DEFAULT_TEMPERATURE);
+  const [maxTokens, setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingPrompts, setLoadingPrompts] = useState(true);
-  const [retryRequest, setRetryRequest] = useState<ChatRequest | null>(null);
+  const [retryRequest, setRetryRequest] = useState<PageChatRequest | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const cancelRequestedRef = useRef(false);
   const sessionsRef = useRef<LocalChatSession[]>([]);
@@ -218,7 +227,7 @@ export default function HomePage() {
     if (sessionId === activeSessionIdRef.current) showSession(remaining[0]);
   }
 
-  async function sendRequest(requestBody: ChatRequest, userMessage?: LocalMessage) {
+  async function sendRequest(requestBody: PageChatRequest, userMessage?: LocalMessage) {
     const assistantId = makeId("assistant");
     const nextMessages = userMessage ? [...messagesRef.current, userMessage] : [...messagesRef.current];
     const withAssistant = [...nextMessages, { id: assistantId, role: "assistant" as const, content: "" }];
@@ -293,11 +302,14 @@ export default function HomePage() {
     const content = input.trim();
     if (!content || loading || !providerId || !modelId) return;
     const userMessage: LocalMessage = { id: makeId("user"), role: "user", content };
-    const requestBody: ChatRequest = {
-      provider: providerId,
-      model: modelId,
-      messages: [...messagesRef.current.map(({ role, content: text }) => ({ role, content: text })), { role: "user", content }],
-    };
+    if (!validTemperature(temperature) || !validMaxTokens(maxTokens)) return;
+    const requestBody = buildPageChatRequest(
+      providerId,
+      modelId,
+      [...messagesRef.current.map(({ role, content: text }) => ({ role, content: text })), { role: "user", content }],
+      temperature,
+      maxTokens,
+    );
     setInput("");
     void sendRequest(requestBody, userMessage);
   }
@@ -345,7 +357,8 @@ export default function HomePage() {
     if (promptSelection === localPromptValue(selectedPromptId)) setPromptSelection("");
   }
 
-  const canSend = Boolean(providerId && modelId && input.trim()) && !loading;
+  const settingsValid = validTemperature(temperature) && validMaxTokens(maxTokens);
+  const canSend = Boolean(providerId && modelId && input.trim()) && settingsValid && !loading;
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: 24, fontFamily: "sans-serif" }}>
@@ -382,7 +395,34 @@ export default function HomePage() {
             {selectedProvider?.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
           </select>
         </label>
+        <label>
+          Temperature
+          <input
+            aria-label="Temperature"
+            type="number"
+            min={MIN_TEMPERATURE}
+            max={MAX_TEMPERATURE}
+            step="0.1"
+            value={temperature}
+            onChange={(event) => setTemperature(Number(event.target.value))}
+            disabled={loading}
+          />
+        </label>
+        <label>
+          Max tokens
+          <input
+            aria-label="Max tokens"
+            type="number"
+            min={MIN_MAX_TOKENS}
+            max={MAX_MAX_TOKENS}
+            step="1"
+            value={maxTokens}
+            onChange={(event) => setMaxTokens(Number(event.target.value))}
+            disabled={loading}
+          />
+        </label>
       </section>
+      {!settingsValid && <p role="alert">Temperature 必须在 0–2 之间，max_tokens 必须是 1–8192 的整数。</p>}
 
       <section aria-label="提示词" style={{ border: "1px solid #ddd", padding: 12, marginBottom: 16 }}>
         <h2 style={{ marginTop: 0, fontSize: 18 }}>提示词</h2>
@@ -425,7 +465,10 @@ export default function HomePage() {
       <section aria-label="消息列表" style={{ minHeight: 220, border: "1px solid #ddd", padding: 12, marginBottom: 16 }}>
         {messages.length === 0 ? <p>还没有消息，输入内容开始对话。</p> : messages.map((message) => (
           <article key={message.id} data-role={message.role} style={{ marginBottom: 10 }}>
-            <strong>{message.role === "user" ? "你" : "助手"}：</strong>{message.content || (loading && message.role === "assistant" ? "…" : "")}
+            <strong>{message.role === "user" ? "你" : "助手"}：</strong>
+            {message.role === "assistant"
+              ? (message.content ? <SafeMarkdown content={message.content} /> : (loading ? "…" : ""))
+              : message.content}
           </article>
         ))}
       </section>
