@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { listBuiltInPrompts } from "@/prompts/built-in-prompts";
 import { parseSseText } from "@/ui/chat-sse";
+import { builtInPromptValue, localPromptValue, promptContentForSelection } from "@/ui/prompt-selection";
 
 describe("chat page SSE parsing", () => {
   it("parses message lifecycle, deltas and errors", () => {
@@ -25,5 +27,16 @@ describe("chat page SSE parsing", () => {
       "error",
     ]);
     expect(JSON.parse(events[1].data)).toEqual({ text: "hello" });
+  });
+});
+
+describe("chat page prompt selection", () => {
+  it("resolves built-in and local groups into the input without sending", () => {
+    const builtIns = listBuiltInPrompts();
+    const localPrompts = [{ id: "local-1", name: "本地模板", content: "本地内容", updatedAt: "2026-09-03T00:00:00.000Z" }];
+
+    expect(promptContentForSelection(builtInPromptValue("summarize"), builtIns, localPrompts)).toContain("概括");
+    expect(promptContentForSelection(localPromptValue("local-1"), builtIns, localPrompts)).toBe("本地内容");
+    expect(promptContentForSelection("", builtIns, localPrompts)).toBeUndefined();
   });
 });

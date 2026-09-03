@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { BuiltInPrompt } from "@/prompts/built-in-prompts";
 import { parseSseText, type ParsedSseEvent } from "@/ui/chat-sse";
 import {
   deleteChatSession,
@@ -17,6 +18,12 @@ import {
   type LocalMessage,
   type LocalPrompt,
 } from "@/ui/local-data";
+import {
+  builtInPromptValue,
+  localPromptValue,
+  promptContentForSelection,
+  type PromptSelection,
+} from "@/ui/prompt-selection";
 
 interface PageProvider {
   id: string;
@@ -62,6 +69,8 @@ export default function HomePage() {
   const [sessions, setSessions] = useState<LocalChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState("");
   const [prompts, setPrompts] = useState<LocalPrompt[]>([]);
+  const [builtInPrompts, setBuiltInPrompts] = useState<BuiltInPrompt[]>([]);
+  const [promptSelection, setPromptSelection] = useState<PromptSelection>("");
   const [selectedPromptId, setSelectedPromptId] = useState("");
   const [promptName, setPromptName] = useState("");
   const [promptContent, setPromptContent] = useState("");
@@ -69,6 +78,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [loadingProviders, setLoadingProviders] = useState(true);
+  const [loadingPrompts, setLoadingPrompts] = useState(true);
   const [retryRequest, setRetryRequest] = useState<ChatRequest | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const cancelRequestedRef = useRef(false);
@@ -121,10 +131,25 @@ export default function HomePage() {
   }
 
   useEffect(() => {
+    let active = true;
     try { setPrompts(loadLocalPrompts(window.localStorage)); }
     catch { setError("浏览器本地提示词读取失败。"); }
 
-    let active = true;
+    void fetch("/api/prompts")
+      .then(async (response) => {
+        if (!response.ok) throw await readError(response);
+        return response.json() as Promise<{ prompts?: BuiltInPrompt[] }>;
+      })
+      .then((body) => {
+        if (active) setBuiltInPrompts(Array.isArray(body.prompts) ? body.prompts : []);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : "内置提示词加载失败。");
+      })
+      .finally(() => {
+        if (active) setLoadingPrompts(false);
+      });
+
     void fetch("/api/providers")
       .then(async (response) => {
         if (!response.ok) throw await readError(response);
@@ -290,6 +315,12 @@ export default function HomePage() {
     setPromptContent(prompt?.content ?? "");
   }
 
+  function insertSelectedPrompt(selection: PromptSelection) {
+    setPromptSelection(selection);
+    const content = promptContentForSelection(selection, builtInPrompts, prompts);
+    if (content !== undefined) setInput(content);
+  }
+
   function savePrompt() {
     const name = promptName.trim();
     const content = promptContent.trim();
@@ -311,6 +342,7 @@ export default function HomePage() {
     setSelectedPromptId("");
     setPromptName("");
     setPromptContent("");
+    if (promptSelection === localPromptValue(selectedPromptId)) setPromptSelection("");
   }
 
   const canSend = Boolean(providerId && modelId && input.trim()) && !loading;
@@ -352,8 +384,28 @@ export default function HomePage() {
         </label>
       </section>
 
-      <section aria-label="自定义提示词" style={{ border: "1px solid #ddd", padding: 12, marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>本地自定义提示词</h2>
+      <section aria-label="提示词" style={{ border: "1px solid #ddd", padding: 12, marginBottom: 16 }}>
+        <h2 style={{ marginTop: 0, fontSize: 18 }}>提示词</h2>
+        <label>
+          选择提示词
+          <select
+            aria-label="选择内置或本地提示词"
+            value={promptSelection}
+            onChange={(event) => insertSelectedPrompt(event.target.value as PromptSelection)}
+            disabled={loadingPrompts || loading}
+          >
+            <option value="">请选择</option>
+            <optgroup label="内置提示词（只读）">
+              {builtInPrompts.map((prompt) => <option key={prompt.id} value={builtInPromptValue(prompt.id)}>{prompt.name}</option>)}
+            </optgroup>
+            <optgroup label="本地自定义提示词">
+              {prompts.map((prompt) => <option key={prompt.id} value={localPromptValue(prompt.id)}>{prompt.name}</option>)}
+            </optgroup>
+          </select>
+        </label>
+        <p style={{ marginBottom: 12 }}>选择后仅插入输入框，不会自动发送。内置提示词不可修改或删除。</p>
+
+        <h3 style={{ fontSize: 16 }}>管理本地自定义提示词</h3>
         <select aria-label="选择提示词" value={selectedPromptId} onChange={(event) => selectPrompt(event.target.value)}>
           <option value="">新提示词</option>
           {prompts.map((prompt) => <option key={prompt.id} value={prompt.id}>{prompt.name}</option>)}
