@@ -11,18 +11,19 @@
     "test": "vitest run --no-cache"
   },
   "dependencies": {
-    "next": "14.2.5",
+    "next": "16.3.4",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "4.3.1",
     "@types/node": "20.14.12",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
-    "eslint": "8.57.0",
-    "eslint-config-next": "14.2.5",
+    "@vitejs/plugin-react": "4.7.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.4",
     "typescript": "5.5.4",
-    "vitest": "2.0.5"
+    "vite": "6.4.3",
+    "vitest": "3.2.6"
   }
 }
