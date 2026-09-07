@@ -36,6 +36,62 @@ describe("OpenAICompatibleAdapter", () => {
     expect(events).toEqual([{ type: "start", requestId: "req-adapter", provider: "deepseek", model: "deepseek-chat" }, { type: "delta", text: "hi" }, { type: "done", finishReason: "stop" }]);
   });
 
+  it("uses DeepSeek reasoning content when a non-stream response has no final content", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "test-deepseek-key");
+    const config = providerConfigs.find((item) => item.id === "deepseek")!;
+    const fetcher = vi.fn(async () => jsonResponse({
+      choices: [{ message: { role: "assistant", content: "", reasoning_content: "分析过程" }, finish_reason: "length" }],
+    }));
+    const adapter = new OpenAICompatibleAdapter(config, { fetcher });
+
+    await expect(adapter.chat({ ...request, model: "deepseek-v4-flash" }, context())).resolves.toMatchObject({
+      provider: "deepseek",
+      finishReason: "length",
+      message: { content: expect.stringContaining("分析过程") },
+    });
+  });
+
+  it("buffers DeepSeek reasoning and emits it only when the stream has no final content", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "test-deepseek-key");
+    const config = providerConfigs.find((item) => item.id === "deepseek")!;
+    const fetcher = vi.fn(async () => sseResponse([
+      'data: {"choices":[{"delta":{"reasoning_content":"先分析"}}]}',
+      'data: {"choices":[{"delta":{"reasoning_content":"再判断"},"finish_reason":"length"}]}',
+      "",
+    ].join("\n\n")));
+    const adapter = new OpenAICompatibleAdapter(config, { fetcher });
+    const events = [];
+
+    for await (const event of adapter.stream({ ...request, model: "deepseek-v4-flash" }, context())) events.push(event);
+
+    expect(events).toEqual([
+      { type: "start", requestId: "req-adapter", provider: "deepseek", model: "deepseek-v4-flash" },
+      { type: "delta", text: expect.stringContaining("先分析再判断") },
+      { type: "done", finishReason: "length" },
+    ]);
+  });
+
+  it("prefers DeepSeek final content over buffered reasoning in a stream", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "test-deepseek-key");
+    const config = providerConfigs.find((item) => item.id === "deepseek")!;
+    const fetcher = vi.fn(async () => sseResponse([
+      'data: {"choices":[{"delta":{"reasoning_content":"内部推理"}}]}',
+      'data: {"choices":[{"delta":{"content":"最终答复"}}]}',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+      "",
+    ].join("\n\n")));
+    const adapter = new OpenAICompatibleAdapter(config, { fetcher });
+    const events = [];
+
+    for await (const event of adapter.stream({ ...request, model: "deepseek-v4-pro" }, context())) events.push(event);
+
+    expect(events).toEqual([
+      { type: "start", requestId: "req-adapter", provider: "deepseek", model: "deepseek-v4-pro" },
+      { type: "delta", text: "最终答复" },
+      { type: "done", finishReason: "stop" },
+    ]);
+  });
+
   it.each([401, 429, 500])("maps upstream HTTP %s errors", async (status) => {
     vi.stubEnv("GLM_API_KEY", "test-glm-key");
     const config = providerConfigs.find((item) => item.id === "glm")!;
