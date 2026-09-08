@@ -34,10 +34,10 @@ function Remove-SecretDirectory {
 
 function Stop-LiveContainer {
   $existing = docker ps -a --filter "name=^/$containerName$" --format "{{.Names}}"
-  Assert-DockerSuccess "无法查询 Docker 容器，请确认 Docker Desktop 已启动。"
+  Assert-DockerSuccess "Cannot query Docker containers. Make sure Docker Desktop is running."
   if ($existing -eq $containerName) {
     docker stop $containerName | Out-Null
-    Assert-DockerSuccess "无法停止现有 Live 容器。"
+    Assert-DockerSuccess "Cannot stop the existing live container."
   }
   Remove-SecretDirectory
 }
@@ -50,14 +50,14 @@ if ($Action -eq "stop") {
 
 if ($Action -eq "status") {
   docker ps -a --filter "name=^/$containerName$" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-  Assert-DockerSuccess "无法查询 Docker 容器，请确认 Docker Desktop 已启动。"
+  Assert-DockerSuccess "Cannot query Docker containers. Make sure Docker Desktop is running."
   exit 0
 }
 
 docker info *> $null
-Assert-DockerSuccess "无法连接 Docker，请确认 Docker Desktop 已启动。"
+Assert-DockerSuccess "Cannot connect to Docker. Make sure Docker Desktop is running."
 docker image inspect $Image *> $null
-Assert-DockerSuccess "找不到镜像 $Image，请先构建镜像。"
+Assert-DockerSuccess "Image $Image was not found. Build the image first."
 Stop-LiveContainer
 
 $keyEnvironment = switch ($Provider) {
@@ -67,10 +67,10 @@ $keyEnvironment = switch ($Provider) {
   "glm" { "GLM_API_KEY" }
 }
 $keyFileEnvironment = "${keyEnvironment}_FILE"
-$secureKey = Read-Host "请输入 $Provider API Key" -AsSecureString
+$secureKey = Read-Host "Enter the $Provider API Key" -AsSecureString
 $credential = [System.Net.NetworkCredential]::new("", $secureKey)
 $plainKey = $credential.Password
-if ([string]::IsNullOrWhiteSpace($plainKey)) { throw "API Key 不能为空。" }
+if ([string]::IsNullOrWhiteSpace($plainKey)) { throw "API Key cannot be empty." }
 
 try {
   New-Item -ItemType Directory -Path $secretBase -Force | Out-Null
@@ -91,7 +91,7 @@ try {
     -e "${keyFileEnvironment}=/run/secrets/provider_api_key" `
     --mount "type=bind,source=$secretFile,target=/run/secrets/provider_api_key,readonly" `
     $Image | Out-Null
-  Assert-DockerSuccess "Live 容器启动失败，请检查端口、镜像和 Docker 日志。"
+  Assert-DockerSuccess "The live container failed to start. Check the port, image, and Docker logs."
 } catch {
   Remove-SecretDirectory
   throw
