@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { providerConfigs } from "@/providers/config";
 import { ProviderAdapterError } from "@/providers/adapters/errors";
+import { configuredApiKey } from "@/providers/adapters/transport";
 import { AnthropicAdapter } from "@/providers/adapters/anthropic-adapter";
 import { OpenAICompatibleAdapter } from "@/providers/adapters/openai-compatible-adapter";
 
@@ -14,6 +15,15 @@ const sseResponse = (body: string) => new Response(body, { headers: { "content-t
 afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("OpenAICompatibleAdapter", () => {
+  it("reads a server-mounted secret file without exposing its path publicly", () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "");
+    vi.stubEnv("DEEPSEEK_API_KEY_FILE", "/run/secrets/provider_api_key");
+    expect(configuredApiKey("DEEPSEEK_API_KEY", (path) => {
+      expect(path).toBe("/run/secrets/provider_api_key");
+      return " mounted-secret\n";
+    })).toBe("mounted-secret");
+  });
+
   it("converts requests and responses for OpenAI-compatible providers", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-openai-key");
     const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

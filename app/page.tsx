@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import type { BuiltInPrompt } from "@/prompts/built-in-prompts";
 import {
   DEFAULT_MAX_TOKENS,
@@ -37,13 +37,23 @@ import {
   type PromptSelection,
 } from "@/ui/prompt-selection";
 import { SafeMarkdown } from "@/ui/safe-markdown";
+import {
+  addLocalDocuments,
+  composeDocumentMessage,
+  formatDocumentSize,
+  type LocalDocument,
+} from "@/ui/local-documents";
+import { sessionExportFilename, sessionMarkdown } from "@/ui/session-export";
 import styles from "./page.module.css";
 
 interface PageProvider {
   id: string;
   name: string;
+  configured: boolean;
   models: Array<{ id: string; name: string }>;
 }
+
+type RuntimeMode = "mock" | "live";
 
 class ChatStreamError extends Error {
   constructor(readonly code: string, message: string) {
@@ -90,7 +100,11 @@ export default function HomePage() {
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingPrompts, setLoadingPrompts] = useState(true);
   const [retryRequest, setRetryRequest] = useState<PageChatRequest | null>(null);
+  const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>("mock");
+  const [documents, setDocuments] = useState<LocalDocument[]>([]);
+  const [copiedMessageId, setCopiedMessageId] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cancelRequestedRef = useRef(false);
   const sessionsRef = useRef<LocalChatSession[]>([]);
   const activeSessionIdRef = useRef("");
@@ -131,6 +145,7 @@ export default function HomePage() {
     setProviderId(session.provider);
     setModelId(session.model);
     setInput("");
+    setDocuments([]);
     setError("");
     setRetryRequest(null);
   }
@@ -163,10 +178,11 @@ export default function HomePage() {
     void fetch("/api/providers")
       .then(async (response) => {
         if (!response.ok) throw await readError(response);
-        return response.json() as Promise<{ providers?: PageProvider[] }>;
+        return response.json() as Promise<{ mode?: RuntimeMode; providers?: PageProvider[] }>;
       })
       .then((body) => {
         if (!active) return;
+        setRuntimeMode(body.mode === "live" ? "live" : "mock");
         const available = Array.isArray(body.providers) ? body.providers : [];
         setProviders(available);
         const fallbackProvider = available[0];
@@ -300,19 +316,68 @@ export default function HomePage() {
   }
 
   function sendMessage() {
-    const content = input.trim();
+    const content = input.trim() || (documents.length > 0 ? "请阅读并分析所附文档。" : "");
     if (!content || loading || !providerId || !modelId) return;
-    const userMessage: LocalMessage = { id: makeId("user"), role: "user", content };
+    const requestContent = composeDocumentMessage(content, documents);
+    const userMessage: LocalMessage = {
+      id: makeId("user"),
+      role: "user",
+      content,
+      attachments: documents.map((document) => ({ name: document.name, kind: document.kind })),
+    };
     if (!validTemperature(temperature) || !validMaxTokens(maxTokens)) return;
     const requestBody = buildPageChatRequest(
       providerId,
       modelId,
-      [...messagesRef.current.map(({ role, content: text }) => ({ role, content: text })), { role: "user", content }],
+      [...messagesRef.current.map(({ role, content: text }) => ({ role, content: text })), { role: "user", content: requestContent }],
       temperature,
       maxTokens,
     );
     setInput("");
+    setDocuments([]);
     void sendRequest(requestBody, userMessage);
+  }
+
+  async function selectDocuments(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (selectedFiles.length === 0) return;
+    try {
+      setDocuments(await addLocalDocuments(documents, selectedFiles));
+      setError("");
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "本地文档读取失败。");
+    }
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    sendMessage();
+  }
+
+  async function copyMessage(message: LocalMessage) {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedMessageId(message.id);
+      window.setTimeout(() => setCopiedMessageId((current) => current === message.id ? "" : current), 1600);
+    } catch {
+      setError("复制失败，请检查浏览器剪贴板权限。");
+    }
+  }
+
+  function exportCurrentSession() {
+    const session = selectChatSession(sessionsRef.current, activeSessionIdRef.current);
+    if (!session || session.messages.length === 0) return;
+    const blob = new Blob([sessionMarkdown(session)], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = sessionExportFilename(session);
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   function stopGeneration() {
@@ -359,7 +424,8 @@ export default function HomePage() {
   }
 
   const settingsValid = validTemperature(temperature) && validMaxTokens(maxTokens);
-  const canSend = Boolean(providerId && modelId && input.trim()) && settingsValid && !loading;
+  const providerReady = runtimeMode === "mock" || selectedProvider?.configured === true;
+  const canSend = Boolean(providerId && modelId && (input.trim() || documents.length > 0)) && settingsValid && providerReady && !loading;
 
   return (
     <main className={styles.pageShell}>
@@ -373,9 +439,19 @@ export default function HomePage() {
             <p>智能对话工作台</p>
           </div>
         </div>
-        <div className={styles.headerMeta}>
-          <span className={styles.statusDot} aria-hidden="true" />
-          服务端安全代理
+        <div className={styles.runtimeSummary}>
+          <span className={`${styles.modeBadge} ${runtimeMode === "live" ? styles.modeLive : styles.modeMock}`}>
+            <span className={styles.statusDot} aria-hidden="true" />
+            {runtimeMode === "live" ? "LIVE" : "MOCK"}
+          </span>
+          <div className={styles.providerStatusList} aria-label="Provider 配置状态">
+            {providers.map((provider) => (
+              <span key={provider.id} className={styles.providerStatus} title={runtimeMode === "mock" ? "Mock 模式可用" : provider.configured ? "密钥已配置" : "密钥未配置"}>
+                <i className={runtimeMode === "mock" || provider.configured ? styles.readyDot : styles.missingDot} />
+                {provider.name}
+              </span>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -389,9 +465,14 @@ export default function HomePage() {
               </div>
               <span className={styles.countBadge}>{sessions.length}/5</span>
             </div>
-            <button className={styles.newButton} type="button" onClick={newSession} disabled={loading || loadingProviders}>
-              <span aria-hidden="true">＋</span> 新建会话
-            </button>
+            <div className={styles.sessionActions}>
+              <button className={styles.newButton} type="button" onClick={newSession} disabled={loading || loadingProviders}>
+                <span aria-hidden="true">＋</span> 新建会话
+              </button>
+              <button className={styles.exportButton} type="button" onClick={exportCurrentSession} disabled={messages.length === 0} title="导出当前会话为 Markdown">
+                导出
+              </button>
+            </div>
             <div className={styles.sessionList}>
               {sessions.map((session) => (
                 <div key={session.id} className={styles.sessionRow}>
@@ -457,55 +538,28 @@ export default function HomePage() {
 
           <div className={styles.localNotice}>
             <span aria-hidden="true">◇</span>
-            <p><strong>本地优先</strong><br />会话与自定义提示词仅保存在当前浏览器。</p>
+            <p><strong>本地优先</strong><br />会话与提示词保存在浏览器；文档正文发送后即从页面内存移除。</p>
           </div>
         </aside>
 
         <section className={styles.chatPanel}>
-          <section aria-label="Provider 设置" className={styles.settingsBar}>
-            <label className={`${styles.field} ${styles.providerField}`}>
-              <span>服务商</span>
-              <select value={providerId} onChange={(event) => changeProvider(event.target.value)} disabled={loadingProviders || loading}>
-                {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
-              </select>
-            </label>
-            <label className={`${styles.field} ${styles.modelField}`}>
-              <span>模型</span>
-              <select value={modelId} onChange={(event) => changeModel(event.target.value)} disabled={!selectedProvider || loading}>
-                {selectedProvider?.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </select>
-            </label>
-            <label className={styles.field}>
-              <span>Temperature</span>
-              <input
-                aria-label="Temperature"
-                type="number"
-                min={MIN_TEMPERATURE}
-                max={MAX_TEMPERATURE}
-                step="0.1"
-                value={temperature}
-                onChange={(event) => setTemperature(Number(event.target.value))}
-                disabled={loading}
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Max tokens</span>
-              <input
-                aria-label="Max tokens"
-                type="number"
-                min={MIN_MAX_TOKENS}
-                max={MAX_MAX_TOKENS}
-                step="1"
-                value={maxTokens}
-                onChange={(event) => setMaxTokens(Number(event.target.value))}
-                disabled={loading}
-              />
-            </label>
-          </section>
+          <header className={styles.chatHeader}>
+            <div>
+              <span className={styles.eyebrow}>ACTIVE CHAT</span>
+              <h2>{selectChatSession(sessions, activeSessionId)?.title ?? "新会话"}</h2>
+            </div>
+            <div className={styles.activeModel}>
+              <span className={providerReady ? styles.readyDot : styles.missingDot} />
+              {selectedProvider?.name ?? "正在加载"} · {selectedProvider?.models.find((model) => model.id === modelId)?.name ?? "选择模型"}
+            </div>
+          </header>
 
-          {!settingsValid && <p className={styles.alert} role="alert">Temperature 必须在 0–2 之间，max_tokens 必须是 1–8192 的整数。</p>}
-          {loadingProviders && <p className={styles.statusMessage} role="status">正在加载模型服务…</p>}
-          {error && <p className={styles.alert} role="alert">{error}</p>}
+          <div className={styles.notificationArea}>
+            {!settingsValid && <p className={styles.alert} role="alert">Temperature 必须在 0–2 之间，max_tokens 必须是 1–8192 的整数。</p>}
+            {loadingProviders && <p className={styles.statusMessage} role="status">正在加载模型服务…</p>}
+            {runtimeMode === "live" && selectedProvider && !selectedProvider.configured && <p className={styles.alert} role="alert">当前 Provider 未配置密钥，请使用安全启动脚本切换。</p>}
+            {error && <p className={styles.alert} role="alert">{error}</p>}
+          </div>
 
           <section aria-label="消息列表" className={styles.messageList}>
             {messages.length === 0 ? (
@@ -514,14 +568,26 @@ export default function HomePage() {
                 <h2>开始一次新的对话</h2>
                 <p>选择模型，输入问题，或从左侧提示词库快速开始。</p>
                 <div className={styles.capabilityTags}>
-                  <span>流式响应</span><span>安全 Markdown</span><span>多模型切换</span>
+                  <span>流式响应</span><span>本地文档</span><span>安全 Markdown</span><span>多模型切换</span>
                 </div>
               </div>
             ) : messages.map((message) => (
               <article key={message.id} data-role={message.role} className={`${styles.message} ${message.role === "user" ? styles.userMessage : styles.assistantMessage}`}>
                 <div className={styles.avatar} aria-hidden="true">{message.role === "user" ? "你" : "AI"}</div>
                 <div className={styles.messageBody}>
-                  <strong>{message.role === "user" ? "你" : "智能助手"}</strong>
+                  <div className={styles.messageMeta}>
+                    <strong>{message.role === "user" ? "你" : "智能助手"}</strong>
+                    {message.role === "assistant" && message.content && (
+                      <button className={styles.copyButton} type="button" onClick={() => void copyMessage(message)}>
+                        {copiedMessageId === message.id ? "已复制" : "复制"}
+                      </button>
+                    )}
+                  </div>
+                  {message.attachments?.length ? (
+                    <div className={styles.messageAttachments}>
+                      {message.attachments.map((attachment) => <span key={`${message.id}-${attachment.name}`}>⌁ {attachment.name}</span>)}
+                    </div>
+                  ) : null}
                   <div className={styles.messageContent}>
                     {message.role === "assistant"
                       ? (message.content ? <SafeMarkdown content={message.content} /> : (loading ? <span className={styles.typing}>正在思考</span> : ""))
@@ -533,12 +599,56 @@ export default function HomePage() {
           </section>
 
           <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
-            <textarea aria-label="消息输入" value={input} onChange={(event) => setInput(event.target.value)} disabled={loading} rows={4} placeholder="输入你的问题，Enter 换行…" />
+            {documents.length > 0 && (
+              <div className={styles.documentTray} aria-label="已选择的本地文档">
+                {documents.map((document) => (
+                  <span className={styles.documentChip} key={document.id}>
+                    <i>{document.kind.toUpperCase()}</i>
+                    <span>{document.name}<small>{formatDocumentSize(document.size)}</small></span>
+                    <button type="button" aria-label={`移除文档 ${document.name}`} onClick={() => setDocuments((items) => items.filter((item) => item.id !== document.id))}>×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <textarea
+              aria-label="消息输入"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleComposerKeyDown}
+              disabled={loading}
+              rows={3}
+              placeholder="输入你的问题。Enter 发送，Shift + Enter 换行…"
+            />
             <div className={styles.composerFooter}>
-              <span>{input.length} 字符</span>
+              <div className={styles.composerTools}>
+                <input ref={fileInputRef} className={styles.fileInput} type="file" accept=".txt,.md,.json,text/plain,text/markdown,application/json" multiple onChange={(event) => void selectDocuments(event)} />
+                <button className={styles.attachButton} type="button" onClick={() => fileInputRef.current?.click()} disabled={loading || documents.length >= 3}>
+                  <span aria-hidden="true">＋</span> 本地文档
+                </button>
+                <span className={styles.characterCount}>{input.length} 字符 · {documents.length}/3 文档</span>
+              </div>
               <div className={styles.composerActions}>
+                <select className={styles.inlineSelect} aria-label="服务商" value={providerId} onChange={(event) => changeProvider(event.target.value)} disabled={loadingProviders || loading}>
+                  {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
+                </select>
+                <select className={`${styles.inlineSelect} ${styles.inlineModelSelect}`} aria-label="模型" value={modelId} onChange={(event) => changeModel(event.target.value)} disabled={!selectedProvider || loading}>
+                  {selectedProvider?.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </select>
+                <details className={styles.advancedSettings}>
+                  <summary aria-label="生成参数">参数</summary>
+                  <div className={styles.advancedPanel}>
+                    <label className={styles.field}>
+                      <span>Temperature</span>
+                      <input aria-label="Temperature" type="number" min={MIN_TEMPERATURE} max={MAX_TEMPERATURE} step="0.1" value={temperature} onChange={(event) => setTemperature(Number(event.target.value))} disabled={loading} />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Max tokens</span>
+                      <input aria-label="Max tokens" type="number" min={MIN_MAX_TOKENS} max={MAX_MAX_TOKENS} step="1" value={maxTokens} onChange={(event) => setMaxTokens(Number(event.target.value))} disabled={loading} />
+                    </label>
+                  </div>
+                </details>
                 {retryRequest && <button className={styles.secondaryButton} type="button" onClick={() => void sendRequest(retryRequest)} disabled={loading}>重试</button>}
-                <button className={styles.secondaryButton} type="button" onClick={stopGeneration} disabled={!loading}>停止生成</button>
+                {loading && <button className={styles.secondaryButton} type="button" onClick={stopGeneration}>停止</button>}
                 <button className={styles.primaryButton} type="submit" disabled={!canSend}>
                   发送 <span aria-hidden="true">↗</span>
                 </button>

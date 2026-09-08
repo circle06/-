@@ -3,9 +3,9 @@ import { providerIds } from "@/domain/provider";
 import { ProviderRegistry, ProviderRegistryError, providerRegistry } from "@/providers/registry";
 
 const MAX_MESSAGES = 50;
-const MAX_MESSAGE_LENGTH = 16 * 1024;
-const MAX_TOTAL_CONTENT = 64 * 1024;
-const MAX_BODY_BYTES = 256 * 1024;
+const MAX_MESSAGE_LENGTH = 320 * 1024;
+const MAX_TOTAL_CONTENT = 384 * 1024;
+const MAX_BODY_BYTES = 512 * 1024;
 const MAX_TOKENS = 8192;
 
 export class RequestValidationError extends Error {

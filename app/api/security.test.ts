@@ -87,9 +87,9 @@ describe("API security boundaries", () => {
   });
 
   it.each([
-    [{ ...validBody, messages: [{ role: "user", content: "x".repeat(16 * 1024 + 1) }] }, "message length"],
+    [{ ...validBody, messages: [{ role: "user", content: "x".repeat(320 * 1024 + 1) }] }, "message length"],
     [{ ...validBody, messages: Array.from({ length: 51 }, () => ({ role: "user", content: "x" })) }, "message count"],
-    [{ ...validBody, messages: Array.from({ length: 20 }, () => ({ role: "user", content: "x".repeat(4 * 1024) })) }, "total message length"],
+    [{ ...validBody, messages: Array.from({ length: 4 }, () => ({ role: "user", content: "x".repeat(100 * 1024) })) }, "total message length"],
     [{ ...validBody, temperature: -0.1 }, "minimum temperature"],
     [{ ...validBody, temperature: 2.1 }, "maximum temperature"],
     [{ ...validBody, max_tokens: 0 }, "minimum max_tokens"],

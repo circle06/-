@@ -1,5 +1,6 @@
 import { ProviderAdapterError } from "@/providers/adapters/errors";
 import type { ProviderCallContext } from "@/domain/provider";
+import { readFileSync } from "node:fs";
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -40,8 +41,27 @@ export async function fetchWithContext(fetcher: FetchLike, url: string, init: Re
   }
 }
 
+type SecretFileReader = (path: string) => string;
+
+export function configuredApiKey(apiKeyEnv: string, readSecretFile: SecretFileReader = (path) => readFileSync(path, "utf8")): string | undefined {
+  const directKey = process.env[apiKeyEnv]?.trim();
+  if (directKey) return directKey;
+  const filePath = process.env[`${apiKeyEnv}_FILE`]?.trim();
+  if (!filePath) return undefined;
+  try {
+    const fileKey = readSecretFile(filePath).trim();
+    return fileKey || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function hasConfiguredApiKey(apiKeyEnv: string): boolean {
+  return configuredApiKey(apiKeyEnv) !== undefined;
+}
+
 export function requireApiKey(apiKeyEnv: string): string {
-  const key = process.env[apiKeyEnv];
+  const key = configuredApiKey(apiKeyEnv);
   if (!key) throw new ProviderAdapterError("PROVIDER_NOT_CONFIGURED", "Provider credentials are not configured.");
   return key;
 }

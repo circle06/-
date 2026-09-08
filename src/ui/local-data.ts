@@ -6,6 +6,7 @@ export interface LocalMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  attachments?: Array<{ name: string; kind: "txt" | "md" | "json" }>;
 }
 
 export interface LocalChatSession {
@@ -37,7 +38,13 @@ function validMessage(value: unknown): value is LocalMessage {
   return isRecord(value)
     && typeof value.id === "string"
     && (value.role === "user" || value.role === "assistant")
-    && typeof value.content === "string";
+    && typeof value.content === "string"
+    && (value.attachments === undefined || (
+      Array.isArray(value.attachments)
+      && value.attachments.every((attachment) => isRecord(attachment)
+        && typeof attachment.name === "string"
+        && (attachment.kind === "txt" || attachment.kind === "md" || attachment.kind === "json"))
+    ));
 }
 
 function validSession(value: unknown): value is LocalChatSession {
