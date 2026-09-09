@@ -28,7 +28,7 @@ function session(index: number): LocalChatSession {
     id: `session-${index}`,
     title: `Session ${index}`,
     provider: "openai",
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     messages: [{ id: `message-${index}`, role: "user", content: `message ${index}` }],
     updatedAt: `2026-09-03T00:00:0${index}.000Z`,
   };
@@ -41,7 +41,7 @@ describe("local chat sessions", () => {
     expect(saved).toHaveLength(MAX_LOCAL_SESSIONS);
     expect(saved.map((item) => item.id)).toEqual(["session-6", "session-5", "session-4", "session-3", "session-2"]);
     expect(loadChatSessions(storage)).toEqual(saved);
-    expect(JSON.parse(storage.values.get(CHAT_SESSIONS_STORAGE_KEY)!)[0]).toMatchObject({ provider: "openai", model: "gpt-4o-mini", messages: [{ content: "message 6" }] });
+    expect(JSON.parse(storage.values.get(CHAT_SESSIONS_STORAGE_KEY)!)[0]).toMatchObject({ provider: "openai", model: "gpt-5-mini", messages: [{ content: "message 6" }] });
   });
 
   it("supports creating/updating, switching and deleting sessions", () => {

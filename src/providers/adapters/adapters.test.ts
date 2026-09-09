@@ -7,7 +7,7 @@ import { OpenAICompatibleAdapter } from "@/providers/adapters/openai-compatible-
 
 const openaiConfig = providerConfigs.find((config) => config.id === "openai")!;
 const anthropicConfig = providerConfigs.find((config) => config.id === "anthropic")!;
-const request = { model: "gpt-4o-mini", messages: [{ role: "user" as const, content: "hello" }] };
+const request = { model: "gpt-5-mini", messages: [{ role: "user" as const, content: "hello" }] };
 const context = (signal = new AbortController().signal) => ({ requestId: "req-adapter", signal, timeoutMs: 1000 });
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const sseResponse = (body: string) => new Response(body, { headers: { "content-type": "text/event-stream" } });
@@ -29,7 +29,7 @@ describe("OpenAICompatibleAdapter", () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("https://api.openai.com/v1/chat/completions");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-openai-key");
-      expect(JSON.parse(String(init?.body))).toMatchObject({ model: "gpt-4o-mini", messages: request.messages });
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: "gpt-5-mini", messages: request.messages });
       return jsonResponse({ choices: [{ message: { role: "assistant", content: "hello back" }, finish_reason: "stop" }] });
     });
     const adapter = new OpenAICompatibleAdapter(openaiConfig, { fetcher });
@@ -136,8 +136,8 @@ describe("AnthropicAdapter", () => {
     const fetcher = vi.fn(async () => sseResponse('event: content_block_delta\ndata: {"delta":{"text":"hello"}}\n\nevent: message_stop\ndata: {}\n\n'));
     const adapter = new AnthropicAdapter(anthropicConfig, { fetcher });
     const events = [];
-    for await (const event of adapter.stream({ ...request, model: "claude-3-5-sonnet" }, context())) events.push(event);
-    expect(events).toEqual([{ type: "start", requestId: "req-adapter", provider: "anthropic", model: "claude-3-5-sonnet" }, { type: "delta", text: "hello" }, { type: "done", finishReason: "stop" }]);
+    for await (const event of adapter.stream({ ...request, model: "claude-3-5-sonnet-20241022" }, context())) events.push(event);
+    expect(events).toEqual([{ type: "start", requestId: "req-adapter", provider: "anthropic", model: "claude-3-5-sonnet-20241022" }, { type: "delta", text: "hello" }, { type: "done", finishReason: "stop" }]);
   });
 
   it("fails safely when credentials are not configured", async () => {

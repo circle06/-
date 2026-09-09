@@ -74,12 +74,14 @@ npm start
 
 | Provider | 当前模型示例 | live Adapter |
 |---|---|---|
-| OpenAI | GPT-4o mini（`gpt-4o-mini`） | OpenAICompatibleAdapter |
-| Anthropic | Claude 3.5 Sonnet（`claude-3-5-sonnet`） | AnthropicAdapter |
+| OpenAI | GPT-6 Astra、GPT-5.6、GPT-5 系列 | OpenAICompatibleAdapter |
+| Anthropic | Claude 4、Claude 3.5 系列 | AnthropicAdapter |
 | DeepSeek | DeepSeek Chat（`deepseek-chat`） | OpenAICompatibleAdapter |
 | GLM | GLM-4-Flash（`glm-4-flash`） | OpenAICompatibleAdapter |
 
 切换 Provider 时，模型会自动切换到该 Provider 当前目录中的第一个模型。Provider 和模型目录由服务端控制，浏览器不能提交任意 `baseUrl`。
+
+模型是否能被当前账号调用，最终由 Provider 返回结果和账号权限决定；目录中出现模型不代表所有 API Key 都已获得访问权限。
 
 生成参数：
 

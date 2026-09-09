@@ -62,8 +62,8 @@
 
 | Provider | Adapter 默认值 | API Key 环境变量示例 | 地址白名单示例（仅服务端） | 模型名称示例（可配置） |
 |---|---|---|---|---|
-| OpenAI | `OpenAICompatibleAdapter` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | `gpt-4o-mini` |
-| Anthropic | `AnthropicAdapter` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | `claude-3-5-sonnet` |
+| OpenAI | `OpenAICompatibleAdapter` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | `gpt-6-astra`、`gpt-5.6-sol`、`gpt-5-mini` |
+| Anthropic | `AnthropicAdapter` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | `claude-opus-4-1`、`claude-3-5-sonnet-20241022` |
 | DeepSeek | `OpenAICompatibleAdapter` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | GLM | `OpenAICompatibleAdapter`；不兼容时 `GLMAdapter` | `GLM_API_KEY` | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
 

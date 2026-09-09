@@ -12,7 +12,7 @@ import { GET as getProviders } from "./providers/route";
 
 const validBody = {
   provider: "openai",
-  model: "gpt-4o-mini",
+  model: "gpt-5-mini",
   messages: [{ role: "user", content: "hello" }],
   stream: false,
   temperature: 0.2,

@@ -4,13 +4,13 @@ import { ProviderRegistryError } from "@/providers/registry";
 
 const validRequest = {
   provider: "openai",
-  model: "gpt-4o-mini",
+  model: "gpt-5-mini",
   messages: [{ role: "user", content: "hello" }],
 };
 
 describe("validateChatRequest", () => {
   it("normalizes a valid request", () => {
-    expect(validateChatRequest(validRequest)).toMatchObject({ provider: "openai", stream: false, request: { model: "gpt-4o-mini" } });
+    expect(validateChatRequest(validRequest)).toMatchObject({ provider: "openai", stream: false, request: { model: "gpt-5-mini" } });
   });
 
   it("rejects arbitrary baseUrl and invalid roles", () => {

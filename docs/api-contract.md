@@ -26,8 +26,8 @@
 ```json
 {
   "providers": [
-    {"id":"openai","name":"OpenAI","models":[{"id":"gpt-4o-mini","name":"GPT-4o mini"}]},
-    {"id":"anthropic","name":"Anthropic","models":[{"id":"claude-3-5-sonnet","name":"Claude 3.5 Sonnet"}]},
+    {"id":"openai","name":"OpenAI","models":[{"id":"gpt-6-astra","name":"GPT-6 Astra"},{"id":"gpt-5.6-sol","name":"GPT-5.6 Sol"},{"id":"gpt-5-mini","name":"GPT-5 mini"}]},
+    {"id":"anthropic","name":"Anthropic","models":[{"id":"claude-opus-4-1","name":"Claude Opus 4.1"},{"id":"claude-3-5-sonnet-20241022","name":"Claude 3.5 Sonnet"}]},
     {"id":"deepseek","name":"DeepSeek","models":[{"id":"deepseek-chat","name":"DeepSeek Chat"}]},
     {"id":"glm","name":"GLM","models":[{"id":"glm-4-flash","name":"GLM-4-Flash"}]}
   ]
@@ -43,7 +43,7 @@
 ```json
 {
   "provider":"openai",
-  "model":"gpt-4o-mini",
+  "model":"gpt-5-mini",
   "messages":[
     {"role":"user","content":"用一句话解释向量数据库。"}
   ],
@@ -59,7 +59,7 @@
 {
   "requestId":"req_123",
   "provider":"openai",
-  "model":"gpt-4o-mini",
+  "model":"gpt-5-mini",
   "message":{"role":"assistant","content":"向量数据库用于按语义相似度检索数据。"},
   "finishReason":"stop",
   "usage":{"inputTokens":18,"outputTokens":16}

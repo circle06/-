@@ -23,7 +23,7 @@ function request(body: unknown, signal?: AbortSignal): Request {
 
 const validBody = {
   provider: "openai",
-  model: "gpt-4o-mini",
+  model: "gpt-5-mini",
   messages: [{ role: "user", content: "hello" }],
 };
 
@@ -32,7 +32,7 @@ describe("POST /api/chat", () => {
     const post = createChatHandler({ requestIdFactory: () => "req-success" });
     const response = await post(request(validBody));
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ requestId: "req-success", provider: "openai", model: "gpt-4o-mini", message: { role: "assistant" }, finishReason: "stop" });
+    await expect(response.json()).resolves.toMatchObject({ requestId: "req-success", provider: "openai", model: "gpt-5-mini", message: { role: "assistant" }, finishReason: "stop" });
   });
 
   it("uses the live factory with an injected fetcher and returns configuration errors without a key", async () => {
