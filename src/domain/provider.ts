@@ -23,11 +23,13 @@ export interface NormalizedChatResponse {
   provider: ProviderId;
   model: string;
   message: ChatMessage;
+  reasoning?: string;
   finishReason: string;
   usage?: Usage;
 }
 export type NormalizedStreamEvent =
   | { type: "start"; requestId: string; provider: ProviderId; model: string }
+  | { type: "reasoning_delta"; text: string }
   | { type: "delta"; text: string }
   | { type: "usage"; usage: Usage }
   | { type: "done"; finishReason: string }

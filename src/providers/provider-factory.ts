@@ -29,7 +29,7 @@ export class ProviderFactory {
     this.mode = options.mode ?? runtimeModeFromEnv();
     this.registry = options.registry ?? new ProviderRegistry(options.configs ?? providerConfigs);
     this.fetcher = options.fetcher;
-    this.timeoutMs = options.timeoutMs ?? 60_000;
+    this.timeoutMs = options.timeoutMs ?? 180_000;
     const configs = options.configs ?? providerConfigs;
     this.configs = new Map(configs.map((config) => [config.id, config]));
   }

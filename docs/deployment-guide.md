@@ -14,7 +14,7 @@
 - 主机或反向代理能够访问容器 3000 端口；
 - live 模式下，容器网络只能访问批准的 Provider HTTPS 地址。
 
-当前阶段三验证环境使用 Node.js 24、Next.js 16.3.4 和 Docker 29.7.2。交付镜像标签为 `multi-provider-llm-toolbox:phase3`，镜像 ID 为 `sha256:44d6d7b920333166facc502289f8c594eeafcd50b04b0c6054b606c2b347cac0`。导出文件大小和校验值见 `docs/test-records.md`。
+当前阶段三验证环境使用 Node.js 24、Next.js 16.3.4 和 Docker 29.7.2。标签 `multi-provider-llm-toolbox:phase3` 对应的已记录镜像是上一候选；流式协议更新后必须按本文重新构建并覆盖导出文件，新的镜像 ID、大小和校验值以 `docs/test-records.md` 后续记录为准。
 
 ## 3. 构建镜像
 

@@ -112,6 +112,12 @@
 .messageContent :global(table) { width: 100%; border-collapse: collapse; }
 .messageContent :global(th), .messageContent :global(td) { padding: 5px 7px; border: 1px solid var(--line); }
 .typing::after { content: "…"; animation: pulse 1.2s infinite; }
+.reasoningPanel { margin-bottom: 7px; border: 1px solid rgba(90, 148, 181, 0.18); border-radius: 8px; color: #90a6b5; background: rgba(7, 19, 29, 0.56); overflow: hidden; }
+.reasoningPanel summary { padding: 8px 11px; color: #7fb4c6; font-size: 12px; font-weight: 700; cursor: pointer; }
+.reasoningPanel > div { max-height: 260px; padding: 2px 12px 11px; overflow-y: auto; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; }
+.reasoningPanel :global(p) { margin: 8px 0 0; }
+.incompleteReply { color: #d2ad73; }
+.truncationNotice { margin: 6px 2px 0; color: #caa66f; font-size: 11px; }
 
 .composer { position: relative; grid-row: 4; width: min(980px, calc(100% - 44px)); margin: 0 auto 18px; border: 1px solid rgba(87, 155, 190, 0.26); border-radius: 15px; background: rgba(13, 28, 42, 0.94); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(40, 189, 211, 0.025) inset; overflow: visible; backdrop-filter: blur(20px); }
 .documentTray { display: flex; gap: 7px; padding: 10px 12px 0; overflow-x: auto; }

@@ -14,6 +14,7 @@ describe("mock provider foundation", () => {
     const events = [];
     for await (const event of provider.stream(request, context)) events.push(event);
     expect(events[0]).toMatchObject({ type: "start", requestId: context.requestId });
+    if (providerId === "deepseek") expect(events).toContainEqual({ type: "reasoning_delta", text: "正在分析问题并组织回答。" });
     expect(events.at(-1)).toEqual({ type: "done", finishReason: "stop" });
   });
 

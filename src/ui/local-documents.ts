@@ -1,5 +1,5 @@
 export const MAX_LOCAL_DOCUMENTS = 3;
-export const MAX_LOCAL_DOCUMENT_BYTES = 100 * 1024;
+export const MAX_LOCAL_DOCUMENT_BYTES = 1024 * 1024;
 
 const allowedExtensions = ["txt", "md", "json"] as const;
 export type LocalDocumentKind = (typeof allowedExtensions)[number];
@@ -35,7 +35,7 @@ export async function readLocalDocument(file: BrowserFileLike): Promise<LocalDoc
   const kind = extensionFor(file.name);
   if (!kind) throw new LocalDocumentError("仅支持 TXT、Markdown 和 JSON 文件。");
   if (file.size <= 0) throw new LocalDocumentError(`${file.name} 是空文件。`);
-  if (file.size > MAX_LOCAL_DOCUMENT_BYTES) throw new LocalDocumentError(`${file.name} 超过 100 KB 限制。`);
+  if (file.size > MAX_LOCAL_DOCUMENT_BYTES) throw new LocalDocumentError(`${file.name} 超过 1 MB 限制。`);
 
   const content = (await file.text()).replace(/^\uFEFF/, "");
   if (!content.trim()) throw new LocalDocumentError(`${file.name} 没有可读取的文本内容。`);
@@ -84,5 +84,7 @@ export function composeDocumentMessage(question: string, documents: readonly Loc
 }
 
 export function formatDocumentSize(bytes: number): string {
-  return bytes < 1024 ? `${bytes} B` : `${Math.ceil(bytes / 1024)} KB`;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

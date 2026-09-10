@@ -32,6 +32,7 @@ export class MockProvider implements LLMProvider {
     if (this.options.error) throw new MockProviderError("MOCK_UPSTREAM_ERROR", this.options.error);
     if ((this.options.delayMs ?? 0) > context.timeoutMs) throw new MockProviderError("UPSTREAM_TIMEOUT", "Mock upstream timed out.");
     yield { type: "start", requestId: context.requestId, provider: this.providerId, model: request.model };
+    if (this.providerId === "deepseek") yield { type: "reasoning_delta", text: "正在分析问题并组织回答。" };
     yield { type: "delta", text: "mock response" };
     if (context.signal.aborted) return;
     yield { type: "done", finishReason: "stop" };

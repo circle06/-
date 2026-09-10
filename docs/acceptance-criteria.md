@@ -20,12 +20,12 @@
 | OpenAI、Anthropic、DeepSeek、GLM 均有模型目录和 Adapter | 通过 | Registry/Factory/Adapter tests |
 | 非流式 JSON 和 SSE `message_*`/error 契约 | 通过 | `app/api/chat/route.test.ts`、`app/page.test.ts` |
 | Provider、模型、字段、角色、长度和参数校验 | 通过 | request-validation/security tests |
-| 60 秒超时、AbortSignal、取消和安全错误映射 | 通过 | Mock、Adapter、route 和 security tests |
+| 180 秒超时、AbortSignal、取消和安全错误映射 | 通过 | Mock、Adapter、route 和 security tests |
 | 响应式聊天 UI、停止、重试和状态提示 | 通过 | 页面实现与人工验收 |
 | 5 个本地会话和本地自定义提示词 | 通过 | local-data tests 与人工验收 |
 | 3 个服务端内置只读提示词 | 通过 | prompts route tests |
 | 安全 Markdown、复制和会话 Markdown 导出 | 通过 | Markdown/export tests 与人工验收 |
-| TXT/MD/JSON 文档，3 个/100 KB/JSON 校验 | 通过 | local-documents tests 与人工验收 |
+| TXT/MD/JSON 文档，3 个/1 MB/JSON 校验 | 通过 | local-documents tests 与人工验收 |
 | Git 提交、阶段分支、标签和 CI | 通过 | Git 历史、`.github/workflows/ci.yml`、GitHub CI |
 | 面向用户的使用手册 | 通过 | `user-guide.md` |
 
@@ -33,7 +33,7 @@
 
 | 验收项 | 状态 | 证据 |
 |---|---|---|
-| lint、typecheck、80 项测试和 build | 通过 | `test-records.md`、CI |
+| lint、typecheck、82 项测试和 build | 通过 | `test-records.md`、CI |
 | npm 已知依赖漏洞修复到 0 | 通过 | `npm audit` 记录；Vitest 新公告已二次修复 |
 | 密钥/客户端 baseUrl 拒绝和响应/console 脱敏 | 通过 | `app/api/security.test.ts` |
 | 默认不返回跨域许可头 | 通过 | API security tests |
@@ -51,4 +51,4 @@
 
 ## 总体验收
 
-阶段一设计、阶段二代码/Git/CI/用户手册、阶段三测试/漏洞修复/amd64 镜像/运维手册均已交付。当前版本适合本机或受控内网验收。公网部署或启用未真实验证的 Provider 前，必须完成表中增强项和对应 Provider 的最小 Live 测试。
+阶段一设计、阶段二代码/Git/CI/用户手册、阶段三测试/漏洞修复/运维手册均已更新。当前源码适合本机验收；本次流式协议更新后的 amd64 镜像必须重新构建并替换旧交付文件后，阶段三容器交付才重新闭环。公网部署或启用未真实验证的 Provider 前，仍须完成表中增强项和对应 Provider 的最小 Live 测试。

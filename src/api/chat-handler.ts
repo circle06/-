@@ -6,7 +6,7 @@ import { ProviderRegistryError, providerRegistry, type ProviderRegistry } from "
 import { ProviderFactory, providerFactory } from "@/providers/provider-factory";
 import type { NormalizedStreamEvent } from "@/domain/provider";
 
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 180_000;
 type ChatErrorCode = "INVALID_REQUEST" | "PROVIDER_NOT_ALLOWED" | "MODEL_NOT_ALLOWED" | "PROVIDER_NOT_CONFIGURED" | "UPSTREAM_AUTH_ERROR" | "UPSTREAM_BAD_REQUEST" | "UPSTREAM_UNAVAILABLE" | "UPSTREAM_TIMEOUT" | "CLIENT_CLOSED" | "INTERNAL_ERROR";
 interface ChatErrorResponse { status: number; code: ChatErrorCode; message: string }
 
@@ -59,6 +59,7 @@ function sse(name: string, data: unknown): string {
 
 function streamEvent(event: NormalizedStreamEvent, requestId: string): { name: string; data: unknown } {
   if (event.type === "start") return { name: "message_start", data: { requestId, provider: event.provider, model: event.model } };
+  if (event.type === "reasoning_delta") return { name: "message_reasoning_delta", data: { text: event.text } };
   if (event.type === "delta") return { name: "message_delta", data: { text: event.text } };
   if (event.type === "usage") return { name: "message_delta", data: { usage: event.usage } };
   if (event.type === "done") return { name: "message_end", data: { finishReason: event.finishReason } };

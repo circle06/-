@@ -23,11 +23,13 @@
 |---|---|---|---|---|
 | ESLint | `npm run lint` | 命令退出码为 0，无 ESLint 错误 | 退出码 0，无错误 | 通过 |
 | TypeScript | `npm run typecheck` | 命令退出码为 0，无类型错误 | 退出码 0，无类型错误 | 通过 |
-| 自动化测试 | `npm test -- --run` | 所有测试通过，不访问真实 Provider | 16 个测试文件、80 个测试全部通过 | 通过 |
+| 自动化测试 | `npm test -- --run` | 所有测试通过，不访问真实 Provider | 16 个测试文件、82 个测试全部通过 | 通过 |
 | 生产构建 | `npm run build` | Next.js 生产构建成功并生成 standalone 输出 | 构建成功；生成首页和 `/api/chat`、`/api/healthz`、`/api/prompts`、`/api/providers` 路由 | 通过 |
 | 依赖审计 | `npm audit` | 不存在已知 npm 依赖漏洞 | `found 0 vulnerabilities` | 通过 |
 
-80 个自动化测试覆盖页面与本地数据逻辑、本地文档、会话导出、请求校验、Provider Registry/Factory、Mock Provider、OpenAI 兼容 Adapter、Anthropic Adapter、非流式与 SSE、超时、取消、统一错误、安全 Markdown，以及 API 安全边界。
+82 个自动化测试覆盖页面与本地数据逻辑、本地文档、会话导出、多轮空消息过滤、请求校验、Provider Registry/Factory、Mock Provider、OpenAI 兼容 Adapter、Anthropic Adapter、实际模型、独立思考/回答流、非流式与 SSE、超时、取消、统一错误、安全 Markdown，以及 API 安全边界。
+
+生产页面浏览器回归验证了连续两轮 Mock 对话；DeepSeek Mock 同时产生思考增量和回答增量，页面将实际模型显示为 `deepseek-v4-pro`，思考内容仅出现在可折叠“查看思考过程”区域，回答正文保持独立。
 
 ## 3. 依赖漏洞验证
 
@@ -52,12 +54,12 @@ docker build --platform linux/amd64 -t multi-provider-llm-toolbox:phase3 .
 
 预期结果：多阶段构建成功，生成 Linux/amd64 镜像；构建上下文不包含 `.env`、Git 数据、宿主机 `node_modules` 或测试缓存。
 
-实际结果：基于 Commit `32ad2a5` 构建最终交付镜像成功。
+历史结果：基于 Commit `32ad2a5` 构建的上一候选镜像成功。2026-09-10 流式协议更新后需重新构建，旧镜像不代表当前源码。
 
 | 属性 | 实际值 |
 |---|---|
 | 镜像名称 | `multi-provider-llm-toolbox:phase3` |
-| 镜像 ID | `sha256:44d6d7b920333166facc502289f8c594eeafcd50b04b0c6054b606c2b347cac0` |
+| 上一候选镜像 ID | `sha256:44d6d7b920333166facc502289f8c594eeafcd50b04b0c6054b606c2b347cac0` |
 | OS/架构 | `linux/amd64` |
 | 默认运行用户 | `nextjs` |
 | 默认模式 | `LLM_MODE=mock` |
@@ -86,7 +88,7 @@ docker inspect llm-toolbox-test
 
 预期结果：容器在 mock 模式正常启动，端口 3000 可访问，容器进程使用 `nextjs` 用户运行。
 
-实际结果：最终镜像在宿主机 3001 端口成功启动，容器配置显示运行用户为 `nextjs`，状态为 `running`，未调用真实 Provider API。
+历史结果：上一候选镜像在宿主机 3001 端口成功启动，容器配置显示运行用户为 `nextjs`，状态为 `running`，未调用真实 Provider API。
 
 ### 4.4 HTTP 验证
 
@@ -118,7 +120,7 @@ docker stop llm-toolbox-test
 
 ## 5. 镜像导出与校验
 
-最终镜像使用 `docker save` 导出：
+上一候选镜像曾使用 `docker save` 导出；本次更新后需用同一命令覆盖：
 
 ```powershell
 docker save -o multi-provider-llm-toolbox-stage3-amd64.tar multi-provider-llm-toolbox:phase3

@@ -12,6 +12,9 @@ describe("chat page SSE parsing", () => {
       "event: message_delta",
       'data: {"text":"hello"}',
       "",
+      "event: message_reasoning_delta",
+      'data: {"text":"thinking"}',
+      "",
       "event: message_end",
       'data: {"finishReason":"stop"}',
       "",
@@ -23,10 +26,12 @@ describe("chat page SSE parsing", () => {
     expect(events.map((event) => event.event)).toEqual([
       "message_start",
       "message_delta",
+      "message_reasoning_delta",
       "message_end",
       "error",
     ]);
     expect(JSON.parse(events[1].data)).toEqual({ text: "hello" });
+    expect(JSON.parse(events[2].data)).toEqual({ text: "thinking" });
   });
 });
 

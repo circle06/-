@@ -6,6 +6,9 @@ export interface LocalMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  reasoning?: string;
+  model?: string;
+  finishReason?: string;
   attachments?: Array<{ name: string; kind: "txt" | "md" | "json" }>;
 }
 
@@ -39,6 +42,9 @@ function validMessage(value: unknown): value is LocalMessage {
     && typeof value.id === "string"
     && (value.role === "user" || value.role === "assistant")
     && typeof value.content === "string"
+    && (value.reasoning === undefined || typeof value.reasoning === "string")
+    && (value.model === undefined || typeof value.model === "string")
+    && (value.finishReason === undefined || typeof value.finishReason === "string")
     && (value.attachments === undefined || (
       Array.isArray(value.attachments)
       && value.attachments.every((attachment) => isRecord(attachment)

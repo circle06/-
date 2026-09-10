@@ -86,7 +86,7 @@
   ],
   "stream": false,
   "temperature": 0.2,
-  "max_tokens": 256
+  "max_tokens": 4096
 }
 ```
 
@@ -121,7 +121,10 @@ X-Accel-Buffering: no
 
 ```text
 event: message_start
-data: {"requestId":"...","provider":"deepseek","model":"deepseek-chat"}
+data: {"requestId":"...","provider":"deepseek","model":"实际响应模型或请求模型"}
+
+event: message_reasoning_delta
+data: {"text":"可选的思考增量"}
 
 event: message_delta
 data: {"text":"增量文本"}
@@ -150,15 +153,15 @@ data: {"requestId":"...","code":"UPSTREAM_TIMEOUT","message":"上游响应超时
 
 | 项目 | 实际限制 |
 |---|---:|
-| 请求体序列化大小 | 最大 512 KiB |
+| 请求体序列化大小 | 最大 5 MiB |
 | 消息数 | 1 到 50 |
-| 单条消息内容 | 1 到 320 KiB 字符 |
-| 全部消息总内容 | 最大 384 KiB 字符 |
+| 单条消息内容 | 1 到 3 MiB 字符 |
+| 全部消息总内容 | 最大 4 MiB 字符 |
 | 模型 ID | 1 到 256 字符，且必须在对应目录 |
 | 消息角色 | `system`、`user`、`assistant` |
 | temperature | 0 到 2 |
-| max_tokens | 1 到 8192 的整数 |
-| Provider 总超时 | 默认 60 秒 |
+| max_tokens | 1 到 32768 的整数；页面默认 4096 |
+| Provider 总超时 | 默认 180 秒 |
 
 应用以 JavaScript 字符串长度检查消息，以 UTF-8 字节长度检查序列化请求体。未知字段、空消息、NaN 和非法类型均返回 `INVALID_REQUEST`。
 

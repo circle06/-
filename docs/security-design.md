@@ -39,12 +39,12 @@ Chat Handler 已实现：
 
 - 允许字段列表和消息对象字段列表。
 - Provider、模型、角色、消息数量、内容长度和总长度校验。
-- 512 KiB 请求体、50 条消息、单条 320 KiB、总内容 384 KiB。
-- temperature 0 到 2；max_tokens 1 到 8192 的整数。
-- 服务端 UUID requestId、60 秒总超时和 AbortSignal 客户端取消传播。
+- 5 MiB 请求体、50 条消息、单条 3 MiB、总内容 4 MiB。
+- temperature 0 到 2；max_tokens 1 到 32768 的整数；请求消息单条最大 3 MB、总正文最大 4 MB、JSON 请求体最大 5 MB。
+- 服务端 UUID requestId、180 秒总超时和 AbortSignal 客户端取消传播。
 - 上游错误归一化；不返回上游原始响应或堆栈。
 
-本地文档在浏览器限制为 3 个、每个 100 KB，仅允许 TXT/MD/JSON。该限制是用户体验和基础资源控制，不是内容安全扫描；文档中的不可信指令仍可能形成提示词注入。
+本地文档在浏览器限制为 3 个、每个 1 MB，仅允许 TXT/MD/JSON。该限制是用户体验和基础资源控制，不是内容安全扫描；文档中的不可信指令仍可能形成提示词注入。
 
 当前没有应用级请求频率、并发或每日配额限制。对公网或共享环境必须在反向代理/API 网关实施限流和请求体上限。
 
@@ -93,7 +93,7 @@ Chat 错误返回固定 code、安全 message 和 requestId。providers/prompts 
 | 密钥泄露 | 服务端 env/file、字段拒绝、错误脱敏、Docker 排除 | 平台 Secret、轮换和访问审计 |
 | 任意上游/SSRF | 固定初始 URL、客户端无 baseUrl | 重定向/DNS/IP 检查和出口 ACL |
 | XSS | 受控 Markdown React 渲染 | 部署 CSP 和持续前端审计 |
-| 超大请求/慢上游 | 字段与长度限制、60 秒超时、取消 | 网关体积、并发和速率限制 |
+| 超大请求/慢上游 | 字段与长度限制、180 秒超时、取消 | 网关体积、并发和速率限制 |
 | 未授权访问 | 默认本地部署、同源浏览器边界 | 网关统一认证；不能只依赖 ACCESS_CODE |
 | 容器越权 | 非 root 用户、最小 standalone 文件 | read-only、资源限制、镜像扫描和签名 |
 | 提示词注入/数据外发 | 文档类型/大小限制和 UI 提示 | 用户数据分级、内容审查和 Provider 合规策略 |
@@ -103,5 +103,5 @@ Chat 错误返回固定 code、安全 message 和 requestId。providers/prompts 
 - `app/api/security.test.ts`：敏感字段拒绝、密钥不进入响应/console、Provider/模型/长度/参数边界、默认 CORS、超时和取消。
 - `src/providers/adapters/adapters.test.ts`：鉴权、4xx/5xx、SSE、timeout、AbortSignal 和缺失密钥。
 - `src/ui/safe-markdown.test.ts`：脚本、HTML 和事件属性不执行。
-- `src/ui/local-documents.test.ts`：格式、JSON、100 KB 和 3 文件限制。
+- `src/ui/local-documents.test.ts`：格式、JSON、1 MB 和 3 文件限制。
 - `docs/test-records.md`：依赖审计、Docker、HTTP、镜像导出和校验记录。

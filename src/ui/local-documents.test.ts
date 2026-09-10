@@ -15,7 +15,7 @@ describe("local documents", () => {
 
   it("validates JSON, file size and the three-document limit", async () => {
     await expect(readLocalDocument(file("bad.json", "{"))).rejects.toThrow("有效的 JSON");
-    await expect(readLocalDocument(file("large.txt", "x", 100 * 1024 + 1))).rejects.toThrow("100 KB");
+    await expect(readLocalDocument(file("large.txt", "x", 1024 * 1024 + 1))).rejects.toThrow("1 MB");
     const current = await addLocalDocuments([], [file("1.txt", "1"), file("2.md", "2"), file("3.json", "{}")]);
     await expect(addLocalDocuments(current, [file("4.txt", "4")])).rejects.toThrow("最多选择 3 个");
   });

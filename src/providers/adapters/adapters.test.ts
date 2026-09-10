@@ -50,14 +50,17 @@ describe("OpenAICompatibleAdapter", () => {
     vi.stubEnv("DEEPSEEK_API_KEY", "test-deepseek-key");
     const config = providerConfigs.find((item) => item.id === "deepseek")!;
     const fetcher = vi.fn(async () => jsonResponse({
+      model: "deepseek-v4-flash-actual",
       choices: [{ message: { role: "assistant", content: "", reasoning_content: "分析过程" }, finish_reason: "length" }],
     }));
     const adapter = new OpenAICompatibleAdapter(config, { fetcher });
 
     await expect(adapter.chat({ ...request, model: "deepseek-v4-flash" }, context())).resolves.toMatchObject({
       provider: "deepseek",
+      model: "deepseek-v4-flash-actual",
       finishReason: "length",
-      message: { content: expect.stringContaining("分析过程") },
+      reasoning: "分析过程",
+      message: { content: "" },
     });
   });
 
@@ -76,7 +79,8 @@ describe("OpenAICompatibleAdapter", () => {
 
     expect(events).toEqual([
       { type: "start", requestId: "req-adapter", provider: "deepseek", model: "deepseek-v4-flash" },
-      { type: "delta", text: expect.stringContaining("先分析再判断") },
+      { type: "reasoning_delta", text: "先分析" },
+      { type: "reasoning_delta", text: "再判断" },
       { type: "done", finishReason: "length" },
     ]);
   });
@@ -97,6 +101,7 @@ describe("OpenAICompatibleAdapter", () => {
 
     expect(events).toEqual([
       { type: "start", requestId: "req-adapter", provider: "deepseek", model: "deepseek-v4-pro" },
+      { type: "reasoning_delta", text: "内部推理" },
       { type: "delta", text: "最终答复" },
       { type: "done", finishReason: "stop" },
     ]);
@@ -138,6 +143,25 @@ describe("AnthropicAdapter", () => {
     const events = [];
     for await (const event of adapter.stream({ ...request, model: "claude-3-5-sonnet-20241022" }, context())) events.push(event);
     expect(events).toEqual([{ type: "start", requestId: "req-adapter", provider: "anthropic", model: "claude-3-5-sonnet-20241022" }, { type: "delta", text: "hello" }, { type: "done", finishReason: "stop" }]);
+  });
+
+  it("keeps Anthropic thinking separate from streamed answer and uses returned model", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-anthropic-key");
+    const fetcher = vi.fn(async () => sseResponse([
+      'event: message_start', 'data: {"message":{"model":"claude-sonnet-4-5-actual"}}',
+      '', 'event: content_block_delta', 'data: {"delta":{"type":"thinking_delta","thinking":"先分析"}}',
+      '', 'event: content_block_delta', 'data: {"delta":{"type":"text_delta","text":"最终答复"}}',
+      '', 'event: message_stop', 'data: {}', '',
+    ].join("\n")));
+    const adapter = new AnthropicAdapter(anthropicConfig, { fetcher });
+    const events = [];
+    for await (const event of adapter.stream({ ...request, model: "claude-sonnet-4-5" }, context())) events.push(event);
+    expect(events).toEqual([
+      { type: "start", requestId: "req-adapter", provider: "anthropic", model: "claude-sonnet-4-5-actual" },
+      { type: "reasoning_delta", text: "先分析" },
+      { type: "delta", text: "最终答复" },
+      { type: "done", finishReason: "stop" },
+    ]);
   });
 
   it("fails safely when credentials are not configured", async () => {

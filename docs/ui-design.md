@@ -40,7 +40,8 @@
 ### 本地文档
 
 - “本地文档”按钮选择 TXT、Markdown、JSON，可多选。
-- 最多 3 个、单个最大 100 KB；待发送文件以标签显示并可移除。
+- 最多 3 个、单个最大 1 MB；待发送文件以标签显示并可移除。
+- DeepSeek/OpenAI-compatible 的 `reasoning_content` 与 Anthropic thinking 以可折叠思考区独立流式显示；正文区域只显示最终回答。
 - 发送后清空文档正文；消息气泡仅显示附件名称。
 
 ### 会话和提示词

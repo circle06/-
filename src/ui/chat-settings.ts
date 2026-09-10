@@ -1,13 +1,17 @@
 export const DEFAULT_TEMPERATURE = 0.2;
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 2;
-export const DEFAULT_MAX_TOKENS = 256;
+export const DEFAULT_MAX_TOKENS = 4096;
 export const MIN_MAX_TOKENS = 1;
-export const MAX_MAX_TOKENS = 8192;
+export const MAX_MAX_TOKENS = 32768;
 
 export interface ChatRequestMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+export function conversationMessagesForRequest(messages: readonly ChatRequestMessage[]): ChatRequestMessage[] {
+  return messages.filter((message) => message.content.trim().length > 0).map((message) => ({ ...message }));
 }
 
 export interface PageChatRequest {

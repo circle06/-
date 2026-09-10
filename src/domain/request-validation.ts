@@ -3,10 +3,10 @@ import { providerIds } from "@/domain/provider";
 import { ProviderRegistry, ProviderRegistryError, providerRegistry } from "@/providers/registry";
 
 const MAX_MESSAGES = 50;
-const MAX_MESSAGE_LENGTH = 320 * 1024;
-const MAX_TOTAL_CONTENT = 384 * 1024;
-const MAX_BODY_BYTES = 512 * 1024;
-const MAX_TOKENS = 8192;
+const MAX_MESSAGE_LENGTH = 3 * 1024 * 1024;
+const MAX_TOTAL_CONTENT = 4 * 1024 * 1024;
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+const MAX_TOKENS = 32768;
 
 export class RequestValidationError extends Error {
   readonly code = "INVALID_REQUEST" as const;

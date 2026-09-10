@@ -87,13 +87,13 @@ describe("API security boundaries", () => {
   });
 
   it.each([
-    [{ ...validBody, messages: [{ role: "user", content: "x".repeat(320 * 1024 + 1) }] }, "message length"],
+    [{ ...validBody, messages: [{ role: "user", content: "x".repeat(3 * 1024 * 1024 + 1) }] }, "message length"],
     [{ ...validBody, messages: Array.from({ length: 51 }, () => ({ role: "user", content: "x" })) }, "message count"],
-    [{ ...validBody, messages: Array.from({ length: 4 }, () => ({ role: "user", content: "x".repeat(100 * 1024) })) }, "total message length"],
+    [{ ...validBody, messages: Array.from({ length: 5 }, () => ({ role: "user", content: "x".repeat(900 * 1024) })) }, "total message length"],
     [{ ...validBody, temperature: -0.1 }, "minimum temperature"],
     [{ ...validBody, temperature: 2.1 }, "maximum temperature"],
     [{ ...validBody, max_tokens: 0 }, "minimum max_tokens"],
-    [{ ...validBody, max_tokens: 8193 }, "maximum max_tokens"],
+    [{ ...validBody, max_tokens: 32769 }, "maximum max_tokens"],
     [{ ...validBody, max_tokens: 1.5 }, "integer max_tokens"],
   ])("enforces the %s boundary", async (body) => {
     const post = createChatHandler({ requestIdFactory: () => "req-limits" });
@@ -104,7 +104,7 @@ describe("API security boundaries", () => {
 
   it.each([
     [0, 1],
-    [2, 8192],
+    [2, 32768],
   ])("accepts approved boundary values temperature=%s and max_tokens=%s", async (temperature, maxTokens) => {
     const post = createChatHandler({ requestIdFactory: () => "req-valid-limits" });
     const response = await post(chatRequest({ ...validBody, temperature, max_tokens: maxTokens }));

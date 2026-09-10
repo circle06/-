@@ -15,8 +15,10 @@ export function sessionMarkdown(session: LocalChatSession): string {
     "",
   ];
   for (const message of session.messages) {
-    lines.push(`## ${message.role === "user" ? "用户" : "助手"}`, "");
+    const model = message.role === "assistant" && message.model ? ` · ${message.model}` : "";
+    lines.push(`## ${message.role === "user" ? "用户" : "助手"}${model}`, "");
     if (message.attachments?.length) lines.push(`附件：${message.attachments.map((item) => item.name).join("、")}`, "");
+    if (message.reasoning) lines.push("<details>", "<summary>思考过程</summary>", "", message.reasoning, "", "</details>", "");
     lines.push(message.content, "");
   }
   return `${lines.join("\n").trim()}\n`;

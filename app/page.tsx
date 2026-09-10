@@ -10,6 +10,7 @@ import {
   MIN_MAX_TOKENS,
   MIN_TEMPERATURE,
   buildPageChatRequest,
+  conversationMessagesForRequest,
   validMaxTokens,
   validTemperature,
   type PageChatRequest,
@@ -111,6 +112,7 @@ export default function HomePage() {
   const messagesRef = useRef<LocalMessage[]>([]);
   const providerIdRef = useRef("");
   const modelIdRef = useRef("");
+  const messageListRef = useRef<HTMLElement | null>(null);
 
   const selectedProvider = providers.find((provider) => provider.id === providerId);
 
@@ -154,6 +156,11 @@ export default function HomePage() {
     messagesRef.current = nextMessages;
     setMessages(nextMessages);
   }
+
+  useEffect(() => {
+    const list = messageListRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [messages]);
 
   useEffect(() => {
     let active = true;
@@ -247,7 +254,7 @@ export default function HomePage() {
   async function sendRequest(requestBody: PageChatRequest, userMessage?: LocalMessage) {
     const assistantId = makeId("assistant");
     const nextMessages = userMessage ? [...messagesRef.current, userMessage] : [...messagesRef.current];
-    const withAssistant = [...nextMessages, { id: assistantId, role: "assistant" as const, content: "" }];
+    const withAssistant = [...nextMessages, { id: assistantId, role: "assistant" as const, content: "", reasoning: "", model: requestBody.model }];
     setVisibleMessages(withAssistant);
     persistActiveSession(withAssistant);
     setError("");
@@ -278,14 +285,23 @@ export default function HomePage() {
         return blocks.flatMap((block) => parseSseText(block));
       };
       const handleEvent = (event: ParsedSseEvent) => {
-        const payload = JSON.parse(event.data) as { text?: string; code?: string; message?: string };
-        if (event.event === "message_start") return;
+        const payload = JSON.parse(event.data) as { text?: string; code?: string; message?: string; requestId?: string; model?: string; finishReason?: string };
+        if (event.event === "message_start") {
+          if (payload.model) setVisibleMessages(messagesRef.current.map((message) => message.id === assistantId ? { ...message, model: payload.model } : message));
+          return;
+        }
+        if (event.event === "message_reasoning_delta" && payload.text) {
+          setVisibleMessages(messagesRef.current.map((message) => message.id === assistantId ? { ...message, reasoning: (message.reasoning ?? "") + payload.text } : message));
+          return;
+        }
         if (event.event === "message_delta" && payload.text) {
           setVisibleMessages(messagesRef.current.map((message) => message.id === assistantId ? { ...message, content: message.content + payload.text } : message));
         } else if (event.event === "message_end") {
           ended = true;
+          setVisibleMessages(messagesRef.current.map((message) => message.id === assistantId ? { ...message, finishReason: payload.finishReason ?? "stop" } : message));
         } else if (event.event === "error") {
-          throw new ChatStreamError(payload.code ?? "STREAM_ERROR", payload.message ?? "流式请求失败。");
+          const diagnostics = [payload.code, payload.requestId].filter(Boolean).join(" · ");
+          throw new ChatStreamError(payload.code ?? "STREAM_ERROR", `${payload.message ?? "流式请求失败。"}${diagnostics ? `（${diagnostics}）` : ""}`);
         }
       };
 
@@ -329,7 +345,7 @@ export default function HomePage() {
     const requestBody = buildPageChatRequest(
       providerId,
       modelId,
-      [...messagesRef.current.map(({ role, content: text }) => ({ role, content: text })), { role: "user", content: requestContent }],
+      conversationMessagesForRequest([...messagesRef.current.map(({ role, content: text }) => ({ role, content: text })), { role: "user", content: requestContent }]),
       temperature,
       maxTokens,
     );
@@ -555,13 +571,13 @@ export default function HomePage() {
           </header>
 
           <div className={styles.notificationArea}>
-            {!settingsValid && <p className={styles.alert} role="alert">Temperature 必须在 0–2 之间，max_tokens 必须是 1–8192 的整数。</p>}
+            {!settingsValid && <p className={styles.alert} role="alert">Temperature 必须在 0–2 之间，max_tokens 必须是 1–32768 的整数。</p>}
             {loadingProviders && <p className={styles.statusMessage} role="status">正在加载模型服务…</p>}
             {runtimeMode === "live" && selectedProvider && !selectedProvider.configured && <p className={styles.alert} role="alert">当前 Provider 未配置密钥，请使用安全启动脚本切换。</p>}
             {error && <p className={styles.alert} role="alert">{error}</p>}
           </div>
 
-          <section aria-label="消息列表" className={styles.messageList}>
+          <section ref={messageListRef} aria-label="消息列表" className={styles.messageList}>
             {messages.length === 0 ? (
               <div className={styles.emptyState}>
                 <div className={styles.emptyMark} aria-hidden="true">✦</div>
@@ -576,7 +592,7 @@ export default function HomePage() {
                 <div className={styles.avatar} aria-hidden="true">{message.role === "user" ? "你" : "AI"}</div>
                 <div className={styles.messageBody}>
                   <div className={styles.messageMeta}>
-                    <strong>{message.role === "user" ? "你" : "智能助手"}</strong>
+                    <strong>{message.role === "user" ? "你" : `智能助手${message.model ? ` · ${message.model}` : ""}`}</strong>
                     {message.role === "assistant" && message.content && (
                       <button className={styles.copyButton} type="button" onClick={() => void copyMessage(message)}>
                         {copiedMessageId === message.id ? "已复制" : "复制"}
@@ -588,11 +604,24 @@ export default function HomePage() {
                       {message.attachments.map((attachment) => <span key={`${message.id}-${attachment.name}`}>⌁ {attachment.name}</span>)}
                     </div>
                   ) : null}
+                  {message.role === "assistant" && message.reasoning ? (
+                    <details className={styles.reasoningPanel} open={loading && message.id === messages[messages.length - 1]?.id}>
+                      <summary>{loading && !message.content ? "正在思考" : "查看思考过程"}</summary>
+                      <div><SafeMarkdown content={message.reasoning} /></div>
+                    </details>
+                  ) : null}
                   <div className={styles.messageContent}>
                     {message.role === "assistant"
-                      ? (message.content ? <SafeMarkdown content={message.content} /> : (loading ? <span className={styles.typing}>正在思考</span> : ""))
+                      ? (message.content
+                        ? <SafeMarkdown content={message.content} />
+                        : (loading
+                          ? <span className={styles.typing}>{message.reasoning ? "正在生成答复" : "正在等待模型响应"}</span>
+                          : <span className={styles.incompleteReply}>{message.finishReason === "length" ? "输出上限已用尽，模型未生成最终答复。请提高 Max tokens 后重试。" : "模型没有返回最终答复。"}</span>))
                       : message.content}
                   </div>
+                  {message.role === "assistant" && message.content && message.finishReason === "length" ? (
+                    <p className={styles.truncationNotice}>回答因输出上限而截断；可提高 Max tokens 后重试。</p>
+                  ) : null}
                 </div>
               </article>
             ))}
@@ -625,7 +654,7 @@ export default function HomePage() {
                 <button className={styles.attachButton} type="button" onClick={() => fileInputRef.current?.click()} disabled={loading || documents.length >= 3}>
                   <span aria-hidden="true">＋</span> 本地文档
                 </button>
-                <span className={styles.characterCount}>{input.length} 字符 · {documents.length}/3 文档</span>
+                <span className={styles.characterCount}>{input.length} 字符 · {documents.length}/3 文档（单个 1 MB）</span>
               </div>
               <div className={styles.composerActions}>
                 <select className={styles.inlineSelect} aria-label="服务商" value={providerId} onChange={(event) => changeProvider(event.target.value)} disabled={loadingProviders || loading}>

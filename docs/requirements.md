@@ -59,7 +59,7 @@ OpenAI、Anthropic 是核心 Provider；DeepSeek、GLM 是必须实现的扩展 
 - `POST /api/chat` 同时支持 `stream=false` 的统一 JSON 和 `stream=true` 的 SSE。
 - 网页固定使用 SSE，并解析 `message_start`、`message_delta`、`message_end`、`error`。
 - 服务端生成 `requestId`，执行超时和客户端取消传播，并归一化上游错误。
-- 支持 `temperature`（0 到 2）和 `max_tokens`（整数 1 到 8192）。
+- 支持 `temperature`（0 到 2）和 `max_tokens`（整数 1 到 32768，默认 4096），适配长回答与推理模型。
 
 ### R-F04 会话与提示词
 
@@ -78,7 +78,7 @@ OpenAI、Anthropic 是核心 Provider；DeepSeek、GLM 是必须实现的扩展 
 ### R-F06 本地文档
 
 - 用户可主动选择 TXT、Markdown、JSON 文档作为当前问题的参考资料。
-- 最多同时选择 3 个文件，每个文件不超过 100 KB；空文件、非法 JSON 和其他扩展名必须拒绝。
+- 最多同时选择 3 个文件，每个文件不超过 1 MB；空文件、非法 JSON 和其他扩展名必须拒绝。
 - 文档正文只存在于当前页面内存，并随本次聊天消息发送；会话只保存附件名称和类型。
 - Live 模式下文档内容会发送至所选上游，因此不得导入密钥、隐私或未经授权的数据。
 
@@ -92,14 +92,14 @@ OpenAI、Anthropic 是核心 Provider；DeepSeek、GLM 是必须实现的扩展 
 ### R-F08 交付与质量
 
 - Git 仓库保存完整源代码和文档，GitHub Actions 在 `main`、`phase/**` 和面向 `main` 的 PR 上运行检查。
-- CI 执行 `npm ci`、lint、TypeScript、80 项 Vitest 测试和 Next.js 构建。
+- CI 执行 `npm ci`、lint、TypeScript、82 项 Vitest 测试和 Next.js 构建。
 - 提供非 root、Next.js standalone、多阶段构建的 Linux/amd64 Docker 镜像。
 - 交付镜像 `.tar`、SHA-256 校验文件、用户手册、测试记录、测试报告和部署手册。
 
 ## 5. API 与数据限制
 
 - 实际路由：`GET /api/healthz`、`GET /api/providers`、`GET /api/prompts`、`POST /api/chat`。
-- Chat 请求体最大 512 KiB；消息 1 到 50 条；单条内容最大 320 KiB；总内容最大 384 KiB。
+- Chat 请求体最大 5 MiB；消息 1 到 50 条；单条内容最大 3 MiB；总内容最大 4 MiB。
 - Chat 请求只允许 `provider`、`model`、`messages`、`stream`、`temperature`、`max_tokens`；消息只允许 `role` 和 `content`。
 - 消息角色只允许 `system`、`user`、`assistant`。
 - 模型标识最大 256 字符且必须存在于对应 Provider 目录。
@@ -137,7 +137,7 @@ OpenAI、Anthropic 是核心 Provider；DeepSeek、GLM 是必须实现的扩展 
 
 ## 8. 最终验收基线
 
-- 自动化：lint、typecheck、16 个测试文件/80 项测试、Next.js build 和 `npm audit` 通过。
+- 自动化：lint、typecheck、16 个测试文件/82 项测试、Next.js build 和 `npm audit` 通过。
 - Live：DeepSeek 完成受控鉴权和聊天烟囱测试；其余 Provider 使用 mock fetch 契约测试。
 - 容器：镜像 `linux/amd64`、默认用户 `nextjs`，healthz、首页、Provider 目录和 Mock chat 均为 HTTP 200。
 - 交付：镜像 ID、导出文件、大小和 SHA-256 记录在 `docs/test-records.md`。

@@ -17,7 +17,7 @@
   `-- POST /api/chat
           |
           | 严格字段/长度/角色/模型校验
-          | requestId + AbortSignal + 60s timeout
+          | requestId + AbortSignal + 180s timeout
           v
       [ProviderFactory / Registry]
           |-- mock -> MockProvider
@@ -42,7 +42,8 @@
 前端辅助模块：
 
 - `src/ui/local-data.ts`：localStorage 会话和提示词读写、校验及 5 会话上限。
-- `src/ui/local-documents.ts`：文件类型、100 KB、3 文件上限及 JSON 格式验证；将文档正文组合进当前用户消息。
+- `src/ui/local-documents.ts`：文件类型、1 MB、3 文件上限及 JSON 格式验证；将文档正文组合进当前用户消息。
+- Provider 适配器统一输出实际响应模型；支持独立的 `reasoning_delta` 思考流和 `delta` 正文流，UI 不会把思考内容伪装成最终答案。
 - `src/ui/safe-markdown.tsx`：仅创建受控 React 元素，不使用 `dangerouslySetInnerHTML`。
 - `src/ui/chat-sse.ts`：解析 SSE 文本块。
 - `src/ui/session-export.ts`：生成会话 Markdown 和安全文件名。
@@ -59,7 +60,7 @@
 
 ### 请求和响应
 
-`src/domain/request-validation.ts` 使用允许字段列表进行校验，拒绝未知字段、未知 Provider/模型、非法角色、空消息、超限内容和非法生成参数。`src/api/chat-handler.ts` 创建 UUID requestId，将浏览器取消和 60 秒总超时传到 Provider，并把错误映射为有限错误码。
+`src/domain/request-validation.ts` 使用允许字段列表进行校验，拒绝未知字段、未知 Provider/模型、非法角色、空消息、超限内容和非法生成参数。`src/api/chat-handler.ts` 创建 UUID requestId，将浏览器取消和 180 秒总超时传到 Provider，并把错误映射为有限错误码。
 
 SSE 对外事件固定为：
 
@@ -106,7 +107,7 @@ Provider 层内部使用 `start`、`delta`、`usage`、`done`、`error`，Chat H
 
 ## 7. 构建与交付
 
-- GitHub Actions 使用 Node.js 24，在 push/PR 上执行安装、lint、typecheck、80 项测试和 build。
+- GitHub Actions 使用 Node.js 24，在 push/PR 上执行安装、lint、typecheck、82 项测试和 build。
 - Dockerfile 使用 deps、builder、runner 三阶段；runner 仅复制 standalone 和静态资源，以 `nextjs` 用户运行。
 - `.dockerignore` 排除 `.env*`、Git、node_modules、`.next`、测试缓存和日志。
 - 最终镜像为 `linux/amd64`，导出 `.tar` 及 SHA-256 校验文件；详细证据见 `docs/test-records.md`。

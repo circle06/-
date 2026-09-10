@@ -56,13 +56,16 @@ describe("POST /api/chat", () => {
 
   it("routes a live stream through an adapter using mock fetch", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-openai-key");
-    const fetcher = vi.fn(async () => new Response('data: {"choices":[{"delta":{"content":"live"}}]}\n\ndata: [DONE]\n\n', { status: 200 }));
+    const fetcher = vi.fn(async () => new Response('data: {"model":"gpt-5-mini-actual","choices":[{"delta":{"reasoning_content":"think"}}]}\n\ndata: {"choices":[{"delta":{"content":"live"}}]}\n\ndata: [DONE]\n\n', { status: 200 }));
     const factory = new ProviderFactory({ mode: "live", fetcher });
     const post = createChatHandler({ factory, requestIdFactory: () => "req-live-sse" });
     const response = await post(request({ ...validBody, stream: true }));
     const body = await response.text();
     expect(response.status).toBe(200);
     expect(body).toContain('event: message_delta');
+    expect(body).toContain('event: message_reasoning_delta');
+    expect(body).toContain('"model":"gpt-5-mini-actual"');
+    expect(body).toContain('"text":"think"');
     expect(body).toContain('"text":"live"');
     expect(body).toContain('event: message_end');
     expect(fetcher).toHaveBeenCalledOnce();

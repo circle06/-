@@ -7,6 +7,7 @@ import {
   MIN_MAX_TOKENS,
   MIN_TEMPERATURE,
   buildPageChatRequest,
+  conversationMessagesForRequest,
   validMaxTokens,
   validTemperature,
 } from "@/ui/chat-settings";
@@ -18,7 +19,7 @@ describe("chat page settings", () => {
       model: "gpt-5-mini",
       messages: [{ role: "user", content: "hello" }],
       temperature: 0.2,
-      max_tokens: 256,
+      max_tokens: 4096,
     });
   });
 
@@ -30,8 +31,19 @@ describe("chat page settings", () => {
     expect(validMaxTokens(MIN_MAX_TOKENS)).toBe(true);
     expect(validMaxTokens(MAX_MAX_TOKENS)).toBe(true);
     expect(validMaxTokens(0)).toBe(false);
-    expect(validMaxTokens(8193)).toBe(false);
+    expect(validMaxTokens(32769)).toBe(false);
     expect(validMaxTokens(1.5)).toBe(false);
     expect(() => buildPageChatRequest("openai", "gpt-5-mini", [{ role: "user", content: "hello" }], 3, 256)).toThrow(RangeError);
+  });
+
+  it("does not send a reasoning-only empty assistant placeholder into the next turn", () => {
+    expect(conversationMessagesForRequest([
+      { role: "user", content: "第一轮" },
+      { role: "assistant", content: "" },
+      { role: "user", content: "第二轮" },
+    ])).toEqual([
+      { role: "user", content: "第一轮" },
+      { role: "user", content: "第二轮" },
+    ]);
   });
 });
