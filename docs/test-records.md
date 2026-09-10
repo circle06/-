@@ -25,7 +25,7 @@
 | TypeScript | `npm run typecheck` | 命令退出码为 0，无类型错误 | 退出码 0，无类型错误 | 通过 |
 | 自动化测试 | `npm test -- --run` | 所有测试通过，不访问真实 Provider | 16 个测试文件、80 个测试全部通过 | 通过 |
 | 生产构建 | `npm run build` | Next.js 生产构建成功并生成 standalone 输出 | 构建成功；生成首页和 `/api/chat`、`/api/healthz`、`/api/prompts`、`/api/providers` 路由 | 通过 |
-| 依赖审计 | `npm audit --cache .npm-cache-phase3` | 不存在已知 npm 依赖漏洞 | `found 0 vulnerabilities` | 通过 |
+| 依赖审计 | `npm audit` | 不存在已知 npm 依赖漏洞 | `found 0 vulnerabilities` | 通过 |
 
 80 个自动化测试覆盖页面与本地数据逻辑、本地文档、会话导出、请求校验、Provider Registry/Factory、Mock Provider、OpenAI 兼容 Adapter、Anthropic Adapter、非流式与 SSE、超时、取消、统一错误、安全 Markdown，以及 API 安全边界。
 

@@ -77,7 +77,7 @@ Live 模式在容器启动时读取以下服务端环境变量：
 | 变量 | 用途 | Mock 是否需要 | Live 是否需要 |
 |---|---|---|---|
 | `LLM_MODE` | `mock` 或 `live` | 默认 `mock` | 设置为 `live` |
-| `ACCESS_CODE` | 公开部署的简单访问码 | 否 | 公开部署时必须配置 |
+| `ACCESS_CODE` | providers/prompts 的简单访问码 | 否 | 可选；不能代替公网统一认证 |
 | `OPENAI_API_KEY` | OpenAI 服务端密钥 | 否 | 使用 OpenAI 时需要 |
 | `ANTHROPIC_API_KEY` | Anthropic 服务端密钥 | 否 | 使用 Anthropic 时需要 |
 | `DEEPSEEK_API_KEY` | DeepSeek 服务端密钥 | 否 | 使用 DeepSeek 时需要 |
@@ -130,7 +130,7 @@ Provider 地址由服务端代码白名单固定，客户端不能传入 `baseUr
 
 ### ACCESS_CODE 注意事项
 
-配置 `ACCESS_CODE` 后，受保护 API 要求请求头 `X-Access-Code`。访问码不能放入 URL、浏览器 localStorage、日志或静态前端构建。当前网页没有访问码输入界面；需要公开部署时，应由经过评审的可信网关或专用客户端安全添加请求头。`GET /api/healthz` 不要求访问码，不能将其当作身份认证接口。
+配置 `ACCESS_CODE` 后，`/api/providers` 和 `/api/prompts` 要求请求头 `X-Access-Code`。当前 `/api/chat` 不检查该访问码，网页也没有访问码输入界面，因此它不能作为完整应用认证。访问码不能放入 URL、浏览器 localStorage、日志或静态前端构建。公开部署必须由经过评审的可信网关统一保护首页和全部 `/api/*`；`GET /api/healthz` 不要求访问码，不能将其当作身份认证接口。
 
 ## 6. 健康检查与验收
 
@@ -217,7 +217,7 @@ Invoke-WebRequest http://localhost:3000/api/healthz
 | `/api/healthz` 无法连接 | 容器未运行、端口未映射或防火墙阻断 | 检查 `docker ps`、`-p 3000:3000` 和主机防火墙 |
 | healthz 200 但聊天失败 | Provider 密钥缺失、上游不可达或模型配置变化 | 根据统一错误码排查；验证出口网络和 Provider 状态，不记录真实密钥 |
 | `PROVIDER_NOT_CONFIGURED` | live 模式缺少当前 Provider 密钥 | 在运行环境安全注入对应 `*_API_KEY` 并重建容器实例 |
-| `UNAUTHORIZED` | `ACCESS_CODE` 已启用但请求头缺失或不匹配 | 检查可信网关/客户端是否发送 `X-Access-Code`，不要把值写入 URL 或日志 |
+| `UNAUTHORIZED` | providers/prompts 启用 `ACCESS_CODE` 但请求头缺失或不匹配 | 检查可信网关/客户端是否发送 `X-Access-Code`；chat 仍需网关统一保护 |
 | `UPSTREAM_AUTH_ERROR` | Provider 拒绝密钥 | 在密钥系统核对状态和权限，必要时轮换；禁止打印密钥 |
 | `UPSTREAM_TIMEOUT` | 上游或网络超过超时 | 检查 DNS、TLS、出口策略与 Provider 状态，稍后重试 |
 | SSE 提前结束 | 反向代理缓冲或超时设置不适合流式响应 | 禁用 SSE 缓冲，调整代理读取/空闲超时，验证客户端取消行为 |

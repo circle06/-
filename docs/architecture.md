@@ -1,146 +1,112 @@
-# MultiProvider LLM Toolbox 架构设计
+# MultiProvider LLM Toolbox 最终架构
 
-## 1. 总体架构
+## 1. 架构概览
 
-系统采用浏览器前端、服务端 API、Provider 适配层和外部大模型 API 四层结构。浏览器只发送业务请求和用户文本；服务端负责校验、选择适配器、读取环境变量中的密钥、调用白名单 Provider，并将统一结果返回。
-
-技术栈定稿为 Next.js + React + TypeScript。前端负责页面、会话状态和浏览器本地数据；Next.js Route Handler 负责统一 API、SSE 和安全边界。
+系统采用浏览器 UI、Next.js API、Provider 领域层、外部模型服务四层结构。默认 Mock 模式不访问外部 API；Live 模式由服务端 Adapter 调用固定地址。
 
 ```text
-[Browser Chat UI]
-       |
-       | HTTPS: /api/providers, /api/chat, /api/prompts
-       v
-[Web/API Server]
-  | CORS / 限流 / 输入校验 / 错误归一化
-  |-- Config: 环境变量 + Provider 白名单 + 模型目录
-  |-- Built-in Prompt Catalog
-  `-- Provider Registry
-          |-- OpenAICompatibleAdapter -> OpenAI API (白名单地址)
-          |-- OpenAICompatibleAdapter -> DeepSeek API (白名单地址)
-          |-- OpenAICompatibleAdapter -> GLM API (白名单地址)
-          `-- AnthropicAdapter          -> Anthropic API
-                         |
-                    [统一 LLMResult / StreamEvent]
+[Browser / React]
+  |-- localStorage: 会话、自定义提示词
+  |-- memory: 待发送文档正文
+  |-- SSE client
+  v
+[Next.js Route Handlers]
+  |-- GET  /api/healthz
+  |-- GET  /api/providers
+  |-- GET  /api/prompts
+  `-- POST /api/chat
+          |
+          | 严格字段/长度/角色/模型校验
+          | requestId + AbortSignal + 60s timeout
+          v
+      [ProviderFactory / Registry]
+          |-- mock -> MockProvider
+          `-- live
+              |-- OpenAICompatibleAdapter -> OpenAI
+              |-- OpenAICompatibleAdapter -> DeepSeek
+              |-- OpenAICompatibleAdapter -> GLM
+              `-- AnthropicAdapter -> Anthropic
 ```
 
-## 2. 前端、服务端、Provider 层职责
+技术栈为 Next.js 16.3.4、React 18、TypeScript、Vitest 5 和 Node.js 24。生产构建使用 Next.js standalone 输出。
 
-### 前端
+## 2. 前端结构
 
-- 渲染聊天消息、Provider/模型选择、提示词模板和连接状态。
-- 保存当前选择、最多 5 个本地会话和用户自定义提示词；只保存非敏感数据，不得保存 API Key。
-- 解析非流式 JSON 或流式事件，并展示用户可理解的错误。
-- 不决定真实 Provider 地址，不拼接上游 URL。
+`app/page.tsx` 是单页聊天工作区，配合 `app/page.module.css` 实现桌面固定视口和移动端响应式布局。
 
-### 服务端
+- 顶栏：产品标识、Mock/Live 状态、四个 Provider 配置状态。
+- 侧栏：最多 5 个本地会话、Markdown 导出、内置与自定义提示词。
+- 聊天区：消息、附件名称、安全 Markdown、复制、错误和加载状态。
+- 输入区：TXT/MD/JSON 文档、Provider、模型、temperature、max_tokens、发送/停止。
 
-- 暴露公开 API 契约并执行请求体、角色、长度、模型和速率限制校验。
-- 从环境变量读取对应 Provider Key，并从白名单解析目标地址。
-- 通过 Provider Registry 选择适配器，统一超时、取消、日志和错误映射。
-- 提供内置提示词目录和健康检查；不保存用户自定义提示词。
+前端辅助模块：
 
-### Provider 层
+- `src/ui/local-data.ts`：localStorage 会话和提示词读写、校验及 5 会话上限。
+- `src/ui/local-documents.ts`：文件类型、100 KB、3 文件上限及 JSON 格式验证；将文档正文组合进当前用户消息。
+- `src/ui/safe-markdown.tsx`：仅创建受控 React 元素，不使用 `dangerouslySetInnerHTML`。
+- `src/ui/chat-sse.ts`：解析 SSE 文本块。
+- `src/ui/session-export.ts`：生成会话 Markdown 和安全文件名。
+- `src/ui/chat-settings.ts`：页面参数默认值、边界校验和请求构建。
 
-- 将统一请求转换为厂商格式。
-- 处理厂商鉴权头、请求字段、响应解析和流式事件映射。
-- 不向业务层泄露 SDK/HTTP 客户端细节。
-- 不记录密钥、完整 Authorization 头或上游原始敏感响应。
+## 3. 服务端和领域层
 
-## 3. 四类 Provider 调用关系
+### Route Handler
 
-- OpenAI：通过 `OpenAICompatibleAdapter` 调用配置的 OpenAI 地址和模型；必须有 Adapter 与 mock 契约测试。
-- DeepSeek：优先复用同一兼容适配器，仅配置独立地址、密钥变量和模型目录；必须有 Adapter 与 mock 契约测试。
-- GLM：先按 OpenAI 兼容协议接入；若请求字段、鉴权或流式事件明显不兼容，改用 `GLMAdapter`，业务契约保持不变；必须有 Adapter 与 mock 契约测试。
-- Anthropic：使用 `AnthropicAdapter`，将 system、messages、模型和 token 参数转换为 Anthropic 格式，并将其事件流映射为统一事件。
+- `app/api/healthz/route.ts`：返回固定健康状态，不访问 Provider。
+- `app/api/providers/route.ts`：返回运行模式、四个 Provider、模型目录和密钥是否配置的布尔值，不返回密钥或地址。
+- `app/api/prompts/route.ts`：返回 3 个内置只读提示词。
+- `app/api/chat/route.ts`：委托 `src/api/chat-handler.ts` 处理 JSON 或 SSE 对话。
 
-四个 Provider 均属于交付范围：真实 API 条件不足时，使用固定请求/响应夹具和 mock HTTP 上游完成非流式、流式、超时、取消及错误映射测试。
+### 请求和响应
 
-## 4. Provider 配置与适配器设计
+`src/domain/request-validation.ts` 使用允许字段列表进行校验，拒绝未知字段、未知 Provider/模型、非法角色、空消息、超限内容和非法生成参数。`src/api/chat-handler.ts` 创建 UUID requestId，将浏览器取消和 60 秒总超时传到 Provider，并把错误映射为有限错误码。
 
-模型名称只是可配置示例，不构成永久承诺。服务端配置为每个 Provider 单独维护 `id`、`displayName`、`apiKeyEnv`、`allowedBaseUrls` 和 `models`；客户端只接收 ProviderId/模型Id。
-
-| Provider | Adapter 默认值 | API Key 环境变量示例 | 地址白名单示例（仅服务端） | 模型名称示例（可配置） |
-|---|---|---|---|---|
-| OpenAI | `OpenAICompatibleAdapter` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | `gpt-6-astra`、`gpt-5.6-sol`、`gpt-5-mini` |
-| Anthropic | `AnthropicAdapter` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | `claude-opus-4-1`、`claude-3-5-sonnet-20241022` |
-| DeepSeek | `OpenAICompatibleAdapter` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| GLM | `OpenAICompatibleAdapter`；不兼容时 `GLMAdapter` | `GLM_API_KEY` | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` |
-
-地址必须精确匹配白名单（协议、主机、端口和固定路径）；不得接受客户端 `baseUrl`，不得将白名单配置回显给浏览器。GLM 仅在鉴权、请求字段、响应结构或流式事件无法稳定归一化时拆分 `GLMAdapter`，并保留同一上层契约。
-
-建议接口（伪类型，仅用于契约说明）：
+SSE 对外事件固定为：
 
 ```text
-interface LLMProvider {
-  id(): ProviderId
-  listModels(): ModelDescriptor[]
-  chat(request: NormalizedChatRequest, context: ProviderCallContext): Promise<NormalizedChatResponse>
-  stream(request: NormalizedChatRequest, context: ProviderCallContext): AsyncIterable<NormalizedStreamEvent>
-}
-
-interface ProviderCallContext {
-  requestId: string
-  signal: AbortSignal
-  timeoutMs: number
-}
+message_start -> message_delta* -> message_end
+                                  `-> error
 ```
 
-`NormalizedChatRequest` 包含 `model`、有序 `messages`、可选 `temperature`、`max_tokens`；不包含客户端传入的 baseUrl 或 API Key。`ProviderCallContext` 必须包含服务端生成的 `requestId`、用于客户端断开传播的 `AbortSignal` 和本次调用的 `timeoutMs`。
+Provider 层内部使用 `start`、`delta`、`usage`、`done`、`error`，Chat Handler 再转换为外部事件；usage 在结束时合并进 `message_end`。
 
-`NormalizedChatResponse` 包含 Provider、模型、文本、完成原因和可选用量；`NormalizedStreamEvent` 仅允许 `start`、`delta`、`usage`、`done`、`error` 等有限类型。
+## 4. Provider 结构
 
-Provider Registry 负责：
+`src/providers/config.ts` 是 Provider、密钥变量、固定 HTTPS 地址和模型目录的唯一配置源。`ProviderRegistry` 校验 Provider/模型并暴露只读元数据；`ProviderFactory` 根据 `LLM_MODE` 返回 MockProvider 或 Live Adapter。
 
-1. 注册已启用 Provider；
-2. 验证模型属于该 Provider 的服务端目录；
-3. 返回适配器实例；
-4. 拒绝未知 Provider、未知模型和任意地址。
+| Provider | Adapter | 密钥变量 | 固定地址 |
+|---|---|---|---|
+| OpenAI | OpenAICompatibleAdapter | `OPENAI_API_KEY` | `https://api.openai.com/v1` |
+| Anthropic | AnthropicAdapter | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` |
+| DeepSeek | OpenAICompatibleAdapter | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` |
+| GLM | OpenAICompatibleAdapter | `GLM_API_KEY` | `https://open.bigmodel.cn/api/paas/v4` |
 
-## 5. 数据流
+每个密钥也可通过对应的 `*_API_KEY_FILE` 读取。OpenAI-compatible Adapter 同时兼容 `content` 和 DeepSeek `reasoning_content`；Anthropic Adapter 单独转换 system/messages、鉴权头和原生 SSE 事件。
 
-### 非流式
+模型目录是服务端允许列表，不是厂商可用性探测。浏览器看到某个模型不代表当前 API Key 一定具有调用权限。
 
-1. 浏览器提交 Provider、模型、消息和 `stream=false`。
-2. 服务端解析 JSON，执行长度、角色、模型和速率限制校验。
-3. Registry 返回适配器；适配器从配置读取密钥和白名单地址。
-4. 适配器调用上游并将响应归一化。
-5. 服务端返回统一 JSON；日志仅记录元数据。
+## 5. 数据边界
 
-### 流式
+| 数据 | 保存位置 | 是否发送服务端/上游 |
+|---|---|---|
+| 会话消息 | 当前浏览器 localStorage | 发送聊天时进入服务端；Live 时进入所选 Provider |
+| 自定义提示词 | 当前浏览器 localStorage | 插入并发送后才进入聊天请求 |
+| 内置提示词 | 服务端只读代码目录 | 通过 `/api/prompts` 返回浏览器 |
+| 本地文档正文 | 发送前位于页面内存 | 当前请求发送；不保存到 localStorage 或服务端数据库 |
+| 文档名称/类型 | 会话 localStorage | 用于页面和 Markdown 导出 |
+| API Key | 服务端环境变量或只读文件 | 仅 Adapter 鉴权头使用，不返回浏览器 |
 
-1. 浏览器提交 `stream=true`。
-2. 服务端创建 requestId、AbortController 和超时计时器，先返回 `start`，然后转发经校验的增量 `delta`。
-3. 上游完成后发送可选 `usage` 与 `done`；客户端断开、显式停止或超时都会触发 AbortSignal，停止读取并取消上游请求。
-4. 上游错误或超时在流未结束时发送一次 `error`，随后关闭流；不得再发送 delta。客户端取消不伪装成上游成功。
+系统没有数据库、账号、云同步或服务端会话存储。
 
-## 6. 错误流
+## 6. 安全边界
 
-```text
-输入错误 -> 400 INVALID_REQUEST
-未知 Provider/模型 -> 400 PROVIDER_NOT_ALLOWED / MODEL_NOT_ALLOWED
-配置缺失 -> 503 PROVIDER_NOT_CONFIGURED
-上游 401/403 -> 502 UPSTREAM_AUTH_ERROR
-上游 429 -> 429 UPSTREAM_RATE_LIMITED
-上游其它 4xx -> 502 UPSTREAM_BAD_REQUEST
-上游 5xx -> 502 UPSTREAM_UNAVAILABLE
-超时/取消 -> 504 UPSTREAM_TIMEOUT 或 499 CLIENT_CLOSED
-内部未分类错误 -> 500 INTERNAL_ERROR
-```
+应用代码已实现：固定初始 Provider 地址、客户端未知字段拒绝、默认无跨域许可头、请求边界、错误归一化、超时/取消、非 root 容器和密钥文件注入。
 
-错误响应使用固定 `code`、用户安全的 `message`、`requestId`；不透传堆栈、密钥和原始敏感头。
+以下能力不属于当前应用层实现，必须由部署环境承担：完整身份认证、`/api/chat` 访问控制、限流、CSP/安全头、结构化审计、DNS/IP 复核、重定向出口限制和 Provider 网络 ACL。`ACCESS_CODE` 当前只由 `/api/providers` 与 `/api/prompts` 检查，因此不能作为完整公网认证方案。
 
-## 7. 模块边界
+## 7. 构建与交付
 
-- `web-ui`：展示和交互，不含厂商调用逻辑。
-- `api`：HTTP 路由、序列化、状态码和事件协议。
-- `domain`：规范化请求/响应、ProviderId、模型和限制规则。
-- `provider-registry`：Provider 注册、白名单和模型目录。
-- `providers/openai-compatible`：OpenAI、DeepSeek、GLM 的兼容实现。
-- `providers/anthropic`：Anthropic 专用实现。
-- `prompt-catalog`：服务端内置提示词目录；用户自定义提示词由前端 LocalStorage/IndexedDB 管理。
-- `config`：环境变量解析、启动时校验和安全默认值。
-- `observability`：脱敏日志、指标、requestId。
-
-模块之间只通过领域契约通信；Provider 层不得反向依赖 UI。
-
+- GitHub Actions 使用 Node.js 24，在 push/PR 上执行安装、lint、typecheck、80 项测试和 build。
+- Dockerfile 使用 deps、builder、runner 三阶段；runner 仅复制 standalone 和静态资源，以 `nextjs` 用户运行。
+- `.dockerignore` 排除 `.env*`、Git、node_modules、`.next`、测试缓存和日志。
+- 最终镜像为 `linux/amd64`，导出 `.tar` 及 SHA-256 校验文件；详细证据见 `docs/test-records.md`。

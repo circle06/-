@@ -199,7 +199,7 @@ GLM_API_KEY=
 
 Provider 地址使用 `src/providers/config.ts` 中的固定 HTTPS 白名单。客户端不能传入 API Key 或 `baseUrl`；`.env.example` 中的 `*_ALLOWED_BASE_URL` 行只是部署配置说明，当前运行时代码不会用它们覆盖固定地址。
 
-`ACCESS_CODE` 是公开部署边界的一部分。当前网页没有访问码输入或请求头配置界面；使用本地网页时应保持 `ACCESS_CODE` 为空。不要把当前版本未经额外加固直接暴露到公网。
+`ACCESS_CODE` 当前只保护 Provider 和内置提示词目录，不能保护 Chat API，也不是完整登录功能。网页没有访问码输入或请求头配置界面；本地网页使用时应保持 `ACCESS_CODE` 为空。不要把当前版本未经可信网关统一认证、HTTPS、限流和出口控制直接暴露到公网。
 
 ## 11. 常见错误与排查
 

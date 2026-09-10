@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-阶段一至阶段三功能和文档已经完成。当前 `phase/3-release` 包含 Next.js 应用、四个 Provider 的 Mock/live Adapter、非流式与 SSE 聊天 API、响应式聊天工作区、本地会话与提示词、本地文档导入、生成参数、安全 Markdown、回复复制与会话导出，以及安全的 Live 密钥启动脚本。项目已完成依赖漏洞修复、API 安全回归、CI 和 Linux/amd64 Docker 验证；最终交付镜像需基于当前提交重新构建并导出。
+阶段一至阶段三功能、文档和交付物已经完成。当前 `phase/3-release` 包含 Next.js 应用、四个 Provider 的 Mock/live Adapter、非流式与 SSE 聊天 API、响应式聊天工作区、本地会话与提示词、本地文档导入、生成参数、安全 Markdown、回复复制与会话导出，以及安全的 Live 密钥启动脚本。项目已完成依赖漏洞修复、API 安全回归、CI、Linux/amd64 Docker 验证和镜像 `.tar`/SHA-256 导出。
 
 ## 用户手册
 
@@ -26,10 +26,11 @@ Docker 构建、部署、密钥注入、升级、回滚和运维排障请参阅 
 - `docs/test-records.md`：质量、安全、API 和容器测试记录。
 - `docs/test-report.md`：阶段三测试结论、漏洞修复和剩余风险。
 - `docs/deployment-guide.md`：amd64 Docker 构建、运行、升级、回滚和排障。
+- `docs/traceability-matrix.md`：用户需求、三个阶段、实现和验收证据的对应关系。
 
 ## 技术路线与数据边界
 
-项目采用 Next.js + React + TypeScript。聊天记录和用户自定义提示词只保存在浏览器本地；服务端只提供内置只读提示词。API Key 和 ACCESS_CODE 只在服务端环境变量中使用，不进入浏览器。
+项目采用 Next.js + React + TypeScript。聊天记录和用户自定义提示词只保存在浏览器本地；服务端只提供内置只读提示词。API Key 只由服务端环境变量或只读密钥文件读取，不进入浏览器。
 
 ## 交付状态
 
@@ -41,4 +42,4 @@ SBOM、镜像签名、压力测试、企业身份认证和密钥轮换演练属�
 
 ## 安全边界
 
-默认本地部署。公开部署时启用服务端 `ACCESS_CODE` 简单访问码，但不实现用户注册和多租户。真实 API Key 只能由服务端环境变量提供；浏览器不得填写或持久化密钥；客户端不得提交任意 `baseUrl`；Provider 地址必须来自服务端白名单；默认不开放任意来源 CORS；请求长度、角色、`max_tokens`、超时、4xx/5xx 和流式事件均受服务端控制。
+默认本地或受控内网部署。浏览器不得填写或持久化密钥；客户端不得提交任意 `baseUrl`；Provider 初始地址来自服务端固定白名单；API 默认不返回跨域许可头；请求长度、角色、`max_tokens`、超时、4xx/5xx 和流式事件受服务端控制。`ACCESS_CODE` 当前仅覆盖 providers/prompts，不能保护 chat；公网部署必须由可信网关补充统一认证、HTTPS、限流、安全头和 Provider 出口控制。完整边界见 `docs/security-design.md`。

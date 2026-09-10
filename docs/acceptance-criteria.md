@@ -1,46 +1,54 @@
-# MultiProvider LLM Toolbox 验收标准
+# MultiProvider LLM Toolbox 最终验收标准
 
-所有条目都必须可通过自动化测试、人工操作、日志/配置观察或构建产物检查验证。OpenAI、Anthropic 是核心必需 Provider；DeepSeek、GLM 是必须实现的扩展 Provider，不得按“可选功能”处理。
+本文件将阶段一制定的标准按最终代码和交付事实校正。状态分为“通过”“部分通过”和“增强项”，不得用设计建议代替实现证据。
 
-## 阶段一：设计验收
+## 阶段一：设计文档
 
-1. requirements.md 明确项目目标、用户角色、功能范围、四个 Provider、非功能需求、安全需求、约束和假设。
-2. architecture.md 包含四层架构、模块边界、数据流、错误流、地址白名单、模型配置和带 requestId、AbortSignal、timeout 的 Provider 接口。
-3. ui-design.md 明确页面结构、本地会话、页面状态、停止与重试、Markdown 和密钥边界。
-4. api-contract.md 覆盖 healthz、providers、chat、内置提示词 List、错误码、SSE 事件和参数限制。
-5. security-design.md 包含 API Key、访问控制、日志脱敏、SSRF、CORS、限流、超时、浏览器存储、Docker 安全和威胁模型。
-6. README.md 说明项目目标、技术路线、安全边界、阶段状态和后续交付计划。
-## 阶段二：最小可用实现验收
+| 验收项 | 状态 | 证据 |
+|---|---|---|
+| 最终需求、角色、范围、安全边界与三阶段交付清楚 | 通过 | `requirements.md` |
+| UI、API、Provider 和数据流与最终实现一致 | 通过 | `architecture.md`、`ui-design.md`、`api-contract.md` |
+| 已实现控制与部署侧控制明确分开 | 通过 | `security-design.md` |
+| 每项用户需求可追溯到阶段、实现和证据 | 通过 | `traceability-matrix.md` |
+| README 提供文档入口和最终状态 | 通过 | `README.md` |
 
-1. 启动后 `GET /healthz` 返回 200 和 `status=ok`。
-2. `GET /api/providers` 只返回服务端启用且白名单内的四个 Provider/模型，不返回地址、密钥或访问码。
-3. OpenAI 非流式和流式调用均通过 mock 上游契约测试；真实 API 条件具备时再增加真实烟囱测试。
-4. Anthropic 非流式和流式调用均通过 mock 上游契约测试，并完成原生事件到统一事件的映射。
-5. DeepSeek 必须实现 `OpenAICompatibleAdapter`（或经 ADR 说明的专用适配器），并通过至少一条非流式、一条流式 mock 契约测试。
-6. GLM 必须实现兼容适配器；若鉴权、请求字段、响应结构或流式事件无法稳定映射，则实现 `GLMAdapter`，并通过非流式/流式 mock 契约测试。
-7. 四个 Provider 均覆盖 requestId、AbortSignal、timeout、客户端取消、上游超时、401/429/5xx 和统一错误映射。
-8. 任意客户端提交 `baseUrl`、未知 Provider/模型、非法角色或超限请求都会被拒绝。
-9. 内置提示词 List 可观察；浏览器端自定义提示词可创建、编辑、删除，并执行长度和数量限制；API Key/ACCESS_CODE 不得进入本地存储。
-10. 默认本地部署可用；公开部署未配置 `ACCESS_CODE` 时启动或请求被拒绝，配置后错误访问码返回统一未授权错误。
-11. 自动化测试覆盖领域校验、Registry、四个 Adapter、错误归一化和 SSE 解析；CI 在干净环境通过。
-12. 代码审查确认真实 API Key/ACCESS_CODE 未出现在前端构建产物、日志、异常、响应、URL、测试快照和 Git。
+## 阶段二：可运行产品
 
-## 阶段三：生产与安全增强验收
+| 验收项 | 状态 | 证据 |
+|---|---|---|
+| `/api/healthz`、providers、prompts 和 chat 路由可用 | 通过 | Route tests、production build、Docker HTTP 200 |
+| OpenAI、Anthropic、DeepSeek、GLM 均有模型目录和 Adapter | 通过 | Registry/Factory/Adapter tests |
+| 非流式 JSON 和 SSE `message_*`/error 契约 | 通过 | `app/api/chat/route.test.ts`、`app/page.test.ts` |
+| Provider、模型、字段、角色、长度和参数校验 | 通过 | request-validation/security tests |
+| 60 秒超时、AbortSignal、取消和安全错误映射 | 通过 | Mock、Adapter、route 和 security tests |
+| 响应式聊天 UI、停止、重试和状态提示 | 通过 | 页面实现与人工验收 |
+| 5 个本地会话和本地自定义提示词 | 通过 | local-data tests 与人工验收 |
+| 3 个服务端内置只读提示词 | 通过 | prompts route tests |
+| 安全 Markdown、复制和会话 Markdown 导出 | 通过 | Markdown/export tests 与人工验收 |
+| TXT/MD/JSON 文档，3 个/100 KB/JSON 校验 | 通过 | local-documents tests 与人工验收 |
+| Git 提交、阶段分支、标签和 CI | 通过 | Git 历史、`.github/workflows/ci.yml`、GitHub CI |
+| 面向用户的使用手册 | 通过 | `user-guide.md` |
 
-### 必做项
+## 阶段三：测试、安全与容器交付
 
-1. 四个 Provider 的功能测试（非流式、流式、取消、超时和主要 4xx/5xx）在 CI 中通过；真实 API 不可用时使用 mock，不降低覆盖要求。
-2. 安全测试验证日志脱敏：API Key、Authorization、ACCESS_CODE、完整用户消息和上游原文不出现在日志、异常、响应或快照。
-3. 安全测试验证 SSRF 防护：任意 `baseUrl`、非白名单主机、重定向、内网/环回/链路本地地址均被拒绝。
-4. 安全测试验证 CORS：默认同源；公开跨域仅允许显式来源，禁止任意来源通配。
-5. Docker 镜像以非 root、最小权限、只读根文件系统（可行时）运行，并通过健康检查。
-6. amd64 镜像可构建、启动并完成 `/healthz`、四 Provider mock 契约测试和安全配置检查。
-7. 限制请求长度、消息角色、`max_tokens`、并发、超时和流式事件；客户端断开会取消上游。
+| 验收项 | 状态 | 证据 |
+|---|---|---|
+| lint、typecheck、80 项测试和 build | 通过 | `test-records.md`、CI |
+| npm 已知依赖漏洞修复到 0 | 通过 | `npm audit` 记录；Vitest 新公告已二次修复 |
+| 密钥/客户端 baseUrl 拒绝和响应/console 脱敏 | 通过 | `app/api/security.test.ts` |
+| 默认不返回跨域许可头 | 通过 | API security tests |
+| 固定 Provider 初始 HTTPS 地址 | 通过 | `src/providers/config.ts` |
+| 完整 SSRF 重定向、DNS/IP 纵深防护 | 增强项 | 当前未实现；部署需限制出口 |
+| 应用级速率/并发限制 | 增强项 | 当前未实现；部署需使用网关 |
+| 完整公网身份认证 | 增强项 | ACCESS_CODE 仅覆盖 providers/prompts，不能保护 chat |
+| DeepSeek 真实 Live 烟囱测试 | 通过 | 用户受控鉴权、非流式和页面流式测试 |
+| OpenAI、Anthropic、GLM 真实账户测试 | 部分通过 | Adapter mock fetch 契约通过，未使用真实账户 |
+| Linux/amd64、非 root、standalone 镜像 | 通过 | 镜像 inspect 和 test records |
+| 最终容器 healthz、首页、Provider 和 Mock chat HTTP 200 | 通过 | `test-records.md` |
+| `.tar` 镜像和 SHA-256 校验文件 | 通过 | 阶段三交付目录 |
+| 测试记录、测试报告和运维部署手册 | 通过 | `test-records.md`、`test-report.md`、`deployment-guide.md` |
+| SBOM、镜像签名、压力测试、轮换演练 | 增强项 | 未纳入本次作业范围 |
 
-### 增强项
+## 总体验收
 
-1. SBOM、镜像签名、可追溯构建证明和漏洞扫描报告归档。
-2. 压力测试覆盖限流、长连接、并发、内存和 CPU 资源曲线。
-3. 密钥轮换演练与自动化检测，证明旧密钥不再使用且无残留。
-4. 更细粒度的指标、告警、审计留存和多区域容灾。
-
+阶段一设计、阶段二代码/Git/CI/用户手册、阶段三测试/漏洞修复/amd64 镜像/运维手册均已交付。当前版本适合本机或受控内网验收。公网部署或启用未真实验证的 Provider 前，必须完成表中增强项和对应 Provider 的最小 Live 测试。
