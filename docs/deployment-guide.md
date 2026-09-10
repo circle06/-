@@ -14,13 +14,7 @@
 - 主机或反向代理能够访问容器 3000 端口；
 - live 模式下，容器网络只能访问批准的 Provider HTTPS 地址。
 
-当前阶段三验证环境使用 Node.js 24、Next.js 16.3.4 和 Docker 29.7.2。已验证镜像为：
-
-```text
-multi-provider-llm-toolbox:phase3
-sha256:6edec35c4a78a3d98b1cb4fb4bb551c48ae5b3d624b3e123282426c3534030d4
-linux/amd64
-```
+当前阶段三验证环境使用 Node.js 24、Next.js 16.3.4 和 Docker 29.7.2。交付镜像标签为 `multi-provider-llm-toolbox:phase3`；最终镜像 ID、文件大小和校验值以 `docs/test-records.md` 中与交付包同时记录的结果为准。
 
 ## 3. 构建镜像
 
@@ -65,6 +59,17 @@ docker run --rm -d `
 
 Mock 模式不应传入任何 Provider API Key。它适合安装验证、页面演示、健康检查和不访问真实上游的功能测试。
 
+### 从交付文件导入镜像
+
+收到导出的 `.tar` 镜像时不需要重新构建：
+
+```powershell
+docker load -i .\multi-provider-llm-toolbox-stage3-amd64.tar
+docker image inspect multi-provider-llm-toolbox:phase3 --format "ID={{.Id}} OS={{.Os}} ARCH={{.Architecture}} USER={{.Config.User}}"
+```
+
+将交付文件的 SHA-256 与同目录校验文件进行比对后再导入。镜像应显示 `OS=linux`、`ARCH=amd64`、`USER=nextjs`。
+
 ## 5. Live 模式与运行时环境变量
 
 Live 模式在容器启动时读取以下服务端环境变量：
@@ -101,6 +106,26 @@ docker run --rm -d `
 
 只配置计划使用的 Provider 密钥；缺少对应密钥时，该 Provider 会返回统一的 `PROVIDER_NOT_CONFIGURED`，不会回显环境变量名称或密钥内容。
 
+### Windows 本地安全启动脚本
+
+项目提供一个通用脚本，在 Docker 中按 Provider 启动 Live 模式：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\run-live.ps1 -Provider deepseek -Action start -Port 3000
+```
+
+`Provider` 支持 `openai`、`anthropic`、`deepseek`、`glm`。脚本通过 `Read-Host -AsSecureString` 读取密钥，在 Windows 系统临时目录创建仅当前用户和 SYSTEM 可访问的临时文件，并只读挂载到容器 `/run/secrets/provider_api_key`。密钥不会出现在 Docker 命令参数、Git 或镜像层中。
+
+查看状态和停止：
+
+```powershell
+.\run-live.ps1 -Action status
+.\run-live.ps1 -Action stop
+```
+
+停止时脚本会停止 `llm-toolbox-live` 容器并删除临时密钥文件。Docker Desktop 必须已经启动，且目标镜像必须存在。PowerShell 若禁止脚本执行，只应对当前进程使用上述 Bypass，不要为整台电脑永久降低策略。
+
 Provider 地址由服务端代码白名单固定，客户端不能传入 `baseUrl`。当前地址为 OpenAI、Anthropic、DeepSeek、GLM 各自的批准 HTTPS API 地址。修改地址需要代码审查、测试和重新构建镜像，不能通过浏览器请求覆盖。
 
 ### ACCESS_CODE 注意事项
@@ -112,8 +137,8 @@ Provider 地址由服务端代码白名单固定，客户端不能传入 `baseUr
 容器启动后执行：
 
 ```powershell
-Invoke-WebRequest http://localhost:3000/api/healthz
-Invoke-WebRequest http://localhost:3000
+Invoke-WebRequest http://localhost:3000/api/healthz -UseBasicParsing
+Invoke-WebRequest http://localhost:3000 -UseBasicParsing
 ```
 
 预期：
@@ -122,6 +147,8 @@ Invoke-WebRequest http://localhost:3000
 - `/` 返回 HTTP 200 和 HTML 页面。
 
 反向代理或编排平台应使用 `/api/healthz` 作为存活探针。该接口证明进程和路由可响应，不证明真实 Provider 密钥、账户余额或上游网络正常。
+
+Mock 模式还应在浏览器验证 Provider/模型切换、SSE、停止、复制、Markdown 导出、本地会话、提示词和 TXT/Markdown/JSON 文档导入。Live 上线前应只对已授权 Provider 做最小真实请求，并确认模型权限、配额、流式响应和错误映射。
 
 ## 7. 日常操作
 

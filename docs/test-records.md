@@ -6,16 +6,16 @@
 |---|---|
 | 项目 | MultiProvider LLM Toolbox |
 | 分支 | `phase/3-release` |
-| 测试日期 | 2026-09-03（Asia/Shanghai） |
+| 测试日期 | 2026-09-03、最终源码回归 2026-09-10（Asia/Shanghai） |
 | 宿主环境 | Windows + PowerShell + Docker Desktop |
 | Node.js | 24.20.0 |
 | npm | 11.19.0 |
 | Next.js | 16.3.4 |
 | Docker CLI | 29.7.2 |
 | 容器目标平台 | Linux/amd64 |
-| Provider 运行模式 | `mock` |
+| Provider 运行模式 | 自动化测试使用 `mock`/mock fetch；手工验收包含 DeepSeek `live` |
 
-本记录中的自动化测试使用 Mock Provider 或 mock fetch，不包含真实 API Key，也没有请求 OpenAI、Anthropic、DeepSeek 或 GLM 的真实上游接口。
+本记录中的自动化测试使用 Mock Provider 或 mock fetch，不包含真实 API Key。2026-09-10 另使用用户自有 DeepSeek API Key 完成受控手工烟囱测试；密钥只在运行时注入，未写入代码、Git、日志或本文档。OpenAI、Anthropic、GLM 未执行真实上游测试。
 
 ## 2. 代码质量与自动化测试
 
@@ -23,11 +23,11 @@
 |---|---|---|---|---|
 | ESLint | `npm run lint` | 命令退出码为 0，无 ESLint 错误 | 退出码 0，无错误 | 通过 |
 | TypeScript | `npm run typecheck` | 命令退出码为 0，无类型错误 | 退出码 0，无类型错误 | 通过 |
-| 自动化测试 | `npm test -- --run` | 所有测试通过，不访问真实 Provider | 14 个测试文件、71 个测试全部通过 | 通过 |
+| 自动化测试 | `npm test -- --run` | 所有测试通过，不访问真实 Provider | 16 个测试文件、80 个测试全部通过 | 通过 |
 | 生产构建 | `npm run build` | Next.js 生产构建成功并生成 standalone 输出 | 构建成功；生成首页和 `/api/chat`、`/api/healthz`、`/api/prompts`、`/api/providers` 路由 | 通过 |
 | 依赖审计 | `npm audit --cache .npm-cache-phase3` | 不存在已知 npm 依赖漏洞 | `found 0 vulnerabilities` | 通过 |
 
-71 个自动化测试覆盖页面与本地数据逻辑、请求校验、Provider Registry/Factory、Mock Provider、OpenAI 兼容 Adapter、Anthropic Adapter、非流式与 SSE、超时、取消、统一错误、安全 Markdown，以及 API 安全边界。
+80 个自动化测试覆盖页面与本地数据逻辑、本地文档、会话导出、请求校验、Provider Registry/Factory、Mock Provider、OpenAI 兼容 Adapter、Anthropic Adapter、非流式与 SSE、超时、取消、统一错误、安全 Markdown，以及 API 安全边界。
 
 ## 3. 依赖漏洞验证
 
@@ -35,6 +35,8 @@
 |---|---|---|---|
 | 修复前基线 | `npm audit` | 识别需要修复的依赖漏洞 | 共 13 项漏洞 |
 | 安全升级后 | `npm audit --cache .npm-cache-phase3` | 漏洞数降为 0 | 共 0 项漏洞 |
+| 新公告复核 | `npm audit`（2026-09-10） | 识别新披露风险 | Vitest 依赖报告 2 项 Moderate |
+| 二次修复后 | 升级 Vitest 5.0.0 后执行 `npm audit` | 漏洞数恢复为 0 | `found 0 vulnerabilities` |
 
 依赖修复采用兼容升级并在升级后重新执行 lint、typecheck、测试和生产构建。`npm audit` 只反映 npm 审计源当前已知的依赖漏洞，不等同于代码、容器基础镜像或运行环境不存在其他风险。
 
@@ -50,12 +52,12 @@ docker build --platform linux/amd64 -t multi-provider-llm-toolbox:phase3 .
 
 预期结果：多阶段构建成功，生成 Linux/amd64 镜像；构建上下文不包含 `.env`、Git 数据、宿主机 `node_modules` 或测试缓存。
 
-实际结果：构建成功。
+实际结果：旧版本镜像构建成功。此记录对应后续 UI、模型目录和 Vitest 更新之前的镜像；最终交付镜像必须重新构建并更新下表。
 
 | 属性 | 实际值 |
 |---|---|
 | 镜像名称 | `multi-provider-llm-toolbox:phase3` |
-| 镜像 ID | `sha256:6edec35c4a78a3d98b1cb4fb4bb551c48ae5b3d624b3e123282426c3534030d4` |
+| 镜像 ID | `sha256:6edec35c4a78a3d98b1cb4fb4bb551c48ae5b3d624b3e123282426c3534030d4`（旧验证镜像，不作为最终交付） |
 | OS/架构 | `linux/amd64` |
 | 默认运行用户 | `nextjs` |
 | 默认模式 | `LLM_MODE=mock` |
@@ -114,7 +116,7 @@ docker stop llm-toolbox-test
 
 ## 5. 测试边界
 
-- 没有配置或使用真实 OpenAI、Anthropic、DeepSeek、GLM API Key。
-- 没有对四个 Provider 执行真实网络烟囱测试；请求/响应转换通过 mock fetch 契约测试验证。
+- DeepSeek 已使用运行时注入密钥完成真实网络烟囱测试；未记录密钥原文。
+- OpenAI、Anthropic、GLM 没有执行真实网络烟囱测试；四个 Provider 的请求/响应转换均通过 mock fetch 契约测试验证。
 - 没有执行压力、长时间稳定性、密钥轮换、SBOM、镜像签名或生产出口网络策略测试。
 - 当前安全测试验证客户端 `baseUrl`/API Key 覆盖被拒绝、服务端密钥不进入响应和日志、非法 Provider/模型与参数被拒绝、默认同源 CORS、timeout 和 AbortSignal；DNS 重绑定、重定向链和容器网络出口仍需部署层补充验证。

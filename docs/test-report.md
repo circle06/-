@@ -2,30 +2,30 @@
 
 ## 1. 测试结论
 
-阶段三当前版本在 mock 边界内通过代码质量、类型检查、71 个自动化测试、Next.js 生产构建、npm 依赖审计和 Linux/amd64 Docker 运行验证。镜像能够以非 root 用户 `nextjs` 启动，`GET /api/healthz` 与网页首页均返回 HTTP 200。
+阶段三当前代码通过代码质量、类型检查、80 个自动化测试、Next.js 生产构建和 npm 依赖审计。Mock 页面功能已完成浏览器验收；DeepSeek 已使用用户自有密钥完成受控 Live 烟囱测试，密钥未写入代码、Git 或测试记录。此前的 Linux/amd64 镜像已验证能够以非 root 用户 `nextjs` 启动，`GET /api/healthz` 与网页首页均返回 HTTP 200；包含最终代码的交付镜像仍需重新构建并记录新镜像 ID 和校验值。
 
-本版本满足本阶段已实现范围的交付条件，可用于本地或受控内网的 mock 部署验证。对公网或 live 模式投产的结论为“有条件通过”：必须先完成真实 Provider 烟囱测试、部署层 HTTPS/访问控制/网络出口限制，并复核剩余安全风险。
+本版本满足本阶段已实现范围的交付条件，可用于本地或受控内网部署验证。对公网或其他 Provider 的 live 模式投产结论仍为“有条件通过”：必须完成对应 Provider 烟囱测试、部署层 HTTPS/访问控制/网络出口限制，并复核剩余安全风险。
 
 ## 2. 测试范围与结果
 
 | 范围 | 结果 | 主要证据 |
 |---|---|---|
 | 静态质量 | 通过 | ESLint、TypeScript 均以退出码 0 完成 |
-| 自动化测试 | 通过 | 14 个测试文件、71 个测试全部通过 |
-| 页面与本地功能 | 通过 | 页面逻辑、本地会话、提示词、参数和安全 Markdown 测试 |
+| 自动化测试 | 通过 | 16 个测试文件、80 个测试全部通过 |
+| 页面与本地功能 | 通过 | 页面逻辑、本地会话、提示词、参数、安全 Markdown、本地文档和导出测试；浏览器手工验收通过 |
 | API 与 SSE | 通过 | providers、prompts、chat、healthz；非流式与流式正常/错误/超时/取消测试 |
 | Provider 层 | 通过 | 四 Provider 元数据、Registry、Factory、Mock Provider、兼容 Adapter 与 Anthropic Adapter 契约测试 |
 | 安全边界 | 通过 | 敏感字段拒绝、日志/响应不泄密、白名单、输入限制、默认同源 CORS、timeout/AbortSignal |
 | 生产构建 | 通过 | Next.js 16.3.4 build 成功并生成 standalone 输出 |
 | npm 依赖审计 | 通过 | 漏洞总数由 13 项降至 0 项 |
-| amd64 容器 | 通过 | `linux/amd64` 镜像成功构建并以 `nextjs` 运行；healthz 与首页 HTTP 200 |
-| 真实 Provider API | 未执行 | 本阶段不配置真实密钥，所有上游测试使用 mock fetch |
+| amd64 容器 | 待最终复验 | 旧代码镜像已完成 `linux/amd64`、非 root 和 HTTP 200 验证；最终代码镜像待重新构建 |
+| 真实 Provider API | 部分通过 | DeepSeek 完成真实鉴权、非流式和页面流式烟囱测试；OpenAI、Anthropic、GLM 未使用真实账户测试 |
 
 详细命令和实际结果见 `docs/test-records.md`。
 
 ## 3. 安全漏洞修复情况
 
-阶段三依赖治理前，`npm audit` 基线共报告 13 项漏洞。升级可安全升级的依赖并完成回归验证后，当前 `npm audit` 结果为 0 项漏洞。
+阶段三依赖治理前，`npm audit` 基线共报告 13 项漏洞。首次升级后降至 0；2026-09-10 审计源新增 Vitest `@vitest/mocker` 路径穿越公告并报告 2 项 Moderate，项目随后将 Vitest 3.2.6 升级到 5.0.0，再次完成完整回归，当前 `npm audit` 结果为 0 项漏洞。
 
 安全回归同时验证：
 
@@ -38,21 +38,21 @@
 
 0 项 npm 漏洞表示审计数据库当前没有匹配到已知问题，不代表业务逻辑、基础镜像、操作系统或未来新增依赖永久无漏洞。上线前后仍需持续审计和镜像扫描。
 
-## 4. Docker 交付结果
+## 4. Docker 验证状态
 
-- 镜像：`multi-provider-llm-toolbox:phase3`
-- 镜像 ID：`sha256:6edec35c4a78a3d98b1cb4fb4bb551c48ae5b3d624b3e123282426c3534030d4`
+- 镜像标签：`multi-provider-llm-toolbox:phase3`
+- 上一次验证镜像 ID：`sha256:6edec35c4a78a3d98b1cb4fb4bb551c48ae5b3d624b3e123282426c3534030d4`（不包含后续 UI、模型目录和依赖更新，不能作为最终交付镜像）
 - 平台：`linux/amd64`
 - 运行用户：`nextjs`（非 root）
 - 默认模式：`LLM_MODE=mock`
 - `GET /api/healthz`：HTTP 200
 - `GET /`：HTTP 200
 
-镜像采用依赖、构建、运行三阶段构建。`.dockerignore` 排除了环境变量文件、Git 数据、宿主机依赖、构建输出和测试缓存。`ACCESS_CODE` 以及四个 Provider API Key 没有写入 Dockerfile 或镜像默认环境，只允许在启动容器时注入。
+镜像采用依赖、构建、运行三阶段构建。`.dockerignore` 排除了环境变量文件、Git 数据、宿主机依赖、构建输出和测试缓存。`ACCESS_CODE` 以及四个 Provider API Key 没有写入 Dockerfile 或镜像默认环境，只允许在启动容器时注入。最终交付前必须基于当前工作树重新构建、运行验收并导出 amd64 `.tar`，然后用新结果替换本节旧镜像记录。
 
 ## 5. 剩余风险与边界
 
-1. 真实 Provider 边界：尚未使用真实 OpenAI、Anthropic、DeepSeek、GLM 账户验证鉴权、模型可用性、限额、实际 SSE 差异和上游错误文案变化；live 上线前必须逐 Provider 执行受控烟囱测试。
+1. 真实 Provider 边界：DeepSeek 已完成受控烟囱测试，但 OpenAI、Anthropic、GLM 尚未使用真实账户验证鉴权、模型可用性、限额、实际 SSE 差异和上游错误文案变化；启用对应 Provider 前必须执行受控烟囱测试。
 2. SSRF 深度验证：当前测试证明客户端任意 `baseUrl` 被拒绝且 Adapter 使用固定 HTTPS 白名单；重定向链、DNS 重绑定、解析后 IP 复核和容器出口 ACL 仍需集成或部署层测试。
 3. 公开访问：`ACCESS_CODE` 只是简单门禁，不替代身份认证、租户隔离或权限系统；公开部署还需要 HTTPS、反向代理、限流和日志保护。
 4. 容量与可用性：尚未执行压力、并发长连接、资源耗尽和长时间稳定性测试，应在确定目标容量后补充。
@@ -65,7 +65,7 @@
 
 - 阶段三必做项中，功能回归、安全字段与参数边界、日志脱敏、默认同源 CORS、timeout/AbortSignal、非 root Docker、Linux/amd64 构建及 healthz 验证已有可观察证据；
 - 四个 Provider 均具备实现、元数据和 mock 契约覆盖，OpenAI、Anthropic 为核心 Provider，DeepSeek、GLM 为必须实现的扩展 Provider；
-- 真实 API 测试不在本次无密钥测试边界内，不能据此宣称 live 环境已完全验收；
+- DeepSeek 已完成最小真实 API 验收，但不能据此宣称其他 Provider 的 live 环境已完全验收；
 - SSRF 的重定向/DNS/网络出口、并发限流和生产资源策略仍需部署环境补充验证。
 
-综合结论：阶段三当前交付在 mock、本地和受控内网范围内满足验收；live 或公开生产部署为有条件通过，完成上述上线前检查后方可批准。
+综合结论：阶段三代码和文档在 mock、本地和受控内网范围内满足验收；完成最终 amd64 镜像重建、运行复验和 `.tar` 导出后形成完整交付。其他 Provider 的 live 或公开生产部署为有条件通过，完成上述上线前检查后方可批准。

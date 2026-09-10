@@ -6,11 +6,13 @@
 
 ## 当前状态
 
-阶段一设计文档已经完成。当前 `phase/2-mvp` 已实现 Next.js 基础应用、Provider Registry、Mock/live Provider Factory、非流式和 SSE 聊天 API、基础聊天页面、本地会话与自定义提示词、服务端内置提示词、生成参数以及安全 Markdown 渲染。阶段三安全加固和 Docker/amd64 交付尚未完成。
+阶段一至阶段三功能和文档已经完成。当前 `phase/3-release` 包含 Next.js 应用、四个 Provider 的 Mock/live Adapter、非流式与 SSE 聊天 API、响应式聊天工作区、本地会话与提示词、本地文档导入、生成参数、安全 Markdown、回复复制与会话导出，以及安全的 Live 密钥启动脚本。项目已完成依赖漏洞修复、API 安全回归、CI 和 Linux/amd64 Docker 验证；最终交付镜像需基于当前提交重新构建并导出。
 
 ## 用户手册
 
-安装、mock/live 启动、聊天操作、本地数据边界和常见错误请参阅 [阶段二用户使用手册](docs/user-guide.md)。
+安装、Mock/Live 启动、聊天操作、本地数据边界和常见错误请参阅 [用户使用手册](docs/user-guide.md)。
+
+Docker 构建、部署、密钥注入、升级、回滚和运维排障请参阅 [部署指南](docs/deployment-guide.md)。测试证据见 [测试记录](docs/test-records.md) 和 [测试报告](docs/test-report.md)。
 
 ## 目录说明
 
@@ -20,16 +22,22 @@
 - `docs/api-contract.md`：HTTP/SSE 接口及参数限制。
 - `docs/security-design.md`：密钥、SSRF、CORS、限流、超时、Docker 等安全设计。
 - `docs/acceptance-criteria.md`：阶段一至三可测试验收标准。
-- `docs/user-guide.md`：阶段二安装、运行和网页功能使用说明。
+- `docs/user-guide.md`：安装、运行和网页功能使用说明。
+- `docs/test-records.md`：质量、安全、API 和容器测试记录。
+- `docs/test-report.md`：阶段三测试结论、漏洞修复和剩余风险。
+- `docs/deployment-guide.md`：amd64 Docker 构建、运行、升级、回滚和排障。
 
 ## 技术路线与数据边界
 
 项目采用 Next.js + React + TypeScript。聊天记录和用户自定义提示词只保存在浏览器本地；服务端只提供内置只读提示词。API Key 和 ACCESS_CODE 只在服务端环境变量中使用，不进入浏览器。
 
-## 后续阶段
+## 交付状态
 
-1. 阶段二：实现网页、服务端 API、四个 Provider 适配器及 mock 契约测试、内置提示词目录和浏览器本地会话/提示词存储、自动化测试和 CI。
-2. 阶段三：完成必做的功能/安全测试、日志脱敏、SSRF、CORS、Docker 和 amd64；SBOM、签名、压力测试和密钥轮换作为增强项。
+1. 阶段一：需求、架构、UI、接口、安全设计和验收标准已完成。
+2. 阶段二：可运行代码、Git/CI 和面向用户的使用手册已完成。
+3. 阶段三：测试与依赖漏洞修复、amd64 容器构建验证、测试报告和面向运维的部署手册已完成。
+
+SBOM、镜像签名、压力测试、企业身份认证和密钥轮换演练属于可选增强项，不在当前作业范围内。
 
 ## 安全边界
 
