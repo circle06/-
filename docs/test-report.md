@@ -2,7 +2,7 @@
 
 ## 1. 测试结论
 
-阶段三当前代码通过代码质量、类型检查、80 个自动化测试、Next.js 生产构建和 npm 依赖审计。Mock 页面功能已完成浏览器验收；DeepSeek 已使用用户自有密钥完成受控 Live 烟囱测试，密钥未写入代码、Git 或测试记录。此前的 Linux/amd64 镜像已验证能够以非 root 用户 `nextjs` 启动，`GET /api/healthz` 与网页首页均返回 HTTP 200；包含最终代码的交付镜像仍需重新构建并记录新镜像 ID 和校验值。
+阶段三当前代码通过代码质量、类型检查、80 个自动化测试、Next.js 生产构建和 npm 依赖审计。Mock 页面功能已完成浏览器验收；DeepSeek 已使用用户自有密钥完成受控 Live 烟囱测试，密钥未写入代码、Git 或测试记录。最终 Linux/amd64 镜像已基于 Commit `32ad2a5` 构建并以非 root 用户 `nextjs` 完成运行验证，健康检查、首页、Provider 目录和 Mock 聊天 API 均返回 HTTP 200。
 
 本版本满足本阶段已实现范围的交付条件，可用于本地或受控内网部署验证。对公网或其他 Provider 的 live 模式投产结论仍为“有条件通过”：必须完成对应 Provider 烟囱测试、部署层 HTTPS/访问控制/网络出口限制，并复核剩余安全风险。
 
@@ -18,7 +18,7 @@
 | 安全边界 | 通过 | 敏感字段拒绝、日志/响应不泄密、白名单、输入限制、默认同源 CORS、timeout/AbortSignal |
 | 生产构建 | 通过 | Next.js 16.3.4 build 成功并生成 standalone 输出 |
 | npm 依赖审计 | 通过 | 漏洞总数由 13 项降至 0 项 |
-| amd64 容器 | 待最终复验 | 旧代码镜像已完成 `linux/amd64`、非 root 和 HTTP 200 验证；最终代码镜像待重新构建 |
+| amd64 容器 | 通过 | 最终镜像为 `linux/amd64`，以 `nextjs` 运行；healthz、首页、Provider 目录和 Mock 聊天 API 均为 HTTP 200 |
 | 真实 Provider API | 部分通过 | DeepSeek 完成真实鉴权、非流式和页面流式烟囱测试；OpenAI、Anthropic、GLM 未使用真实账户测试 |
 
 详细命令和实际结果见 `docs/test-records.md`。
@@ -38,17 +38,22 @@
 
 0 项 npm 漏洞表示审计数据库当前没有匹配到已知问题，不代表业务逻辑、基础镜像、操作系统或未来新增依赖永久无漏洞。上线前后仍需持续审计和镜像扫描。
 
-## 4. Docker 验证状态
+## 4. Docker 交付结果
 
 - 镜像标签：`multi-provider-llm-toolbox:phase3`
-- 上一次验证镜像 ID：`sha256:6edec35c4a78a3d98b1cb4fb4bb551c48ae5b3d624b3e123282426c3534030d4`（不包含后续 UI、模型目录和依赖更新，不能作为最终交付镜像）
+- 镜像 ID：`sha256:44d6d7b920333166facc502289f8c594eeafcd50b04b0c6054b606c2b347cac0`
+- 构建 Commit：`32ad2a5`
 - 平台：`linux/amd64`
 - 运行用户：`nextjs`（非 root）
 - 默认模式：`LLM_MODE=mock`
 - `GET /api/healthz`：HTTP 200
 - `GET /`：HTTP 200
+- `GET /api/providers`：HTTP 200
+- `POST /api/chat`（Mock）：HTTP 200
+- 导出文件：`multi-provider-llm-toolbox-stage3-amd64.tar`，92,624,384 bytes（88.33 MiB）
+- SHA-256：`b41c4a83f29a619862033f47f8ad840c91f5aae4fc58fddbbe64ec2166761d48`
 
-镜像采用依赖、构建、运行三阶段构建。`.dockerignore` 排除了环境变量文件、Git 数据、宿主机依赖、构建输出和测试缓存。`ACCESS_CODE` 以及四个 Provider API Key 没有写入 Dockerfile 或镜像默认环境，只允许在启动容器时注入。最终交付前必须基于当前工作树重新构建、运行验收并导出 amd64 `.tar`，然后用新结果替换本节旧镜像记录。
+镜像采用依赖、构建、运行三阶段构建。`.dockerignore` 排除了环境变量文件、Git 数据、宿主机依赖、构建输出和测试缓存。`ACCESS_CODE` 以及四个 Provider API Key 没有写入 Dockerfile 或镜像默认环境，只允许在启动容器时注入。最终镜像已经导出为 `.tar` 并提供独立 SHA-256 校验文件。
 
 ## 5. 剩余风险与边界
 
@@ -68,4 +73,4 @@
 - DeepSeek 已完成最小真实 API 验收，但不能据此宣称其他 Provider 的 live 环境已完全验收；
 - SSRF 的重定向/DNS/网络出口、并发限流和生产资源策略仍需部署环境补充验证。
 
-综合结论：阶段三代码和文档在 mock、本地和受控内网范围内满足验收；完成最终 amd64 镜像重建、运行复验和 `.tar` 导出后形成完整交付。其他 Provider 的 live 或公开生产部署为有条件通过，完成上述上线前检查后方可批准。
+综合结论：阶段三代码、文档和 amd64 镜像交付在 mock、本地和受控内网范围内满足验收。其他 Provider 的 live 或公开生产部署为有条件通过，完成上述上线前检查后方可批准。

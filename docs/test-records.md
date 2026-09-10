@@ -52,12 +52,12 @@ docker build --platform linux/amd64 -t multi-provider-llm-toolbox:phase3 .
 
 预期结果：多阶段构建成功，生成 Linux/amd64 镜像；构建上下文不包含 `.env`、Git 数据、宿主机 `node_modules` 或测试缓存。
 
-实际结果：旧版本镜像构建成功。此记录对应后续 UI、模型目录和 Vitest 更新之前的镜像；最终交付镜像必须重新构建并更新下表。
+实际结果：基于 Commit `32ad2a5` 构建最终交付镜像成功。
 
 | 属性 | 实际值 |
 |---|---|
 | 镜像名称 | `multi-provider-llm-toolbox:phase3` |
-| 镜像 ID | `sha256:6edec35c4a78a3d98b1cb4fb4bb551c48ae5b3d624b3e123282426c3534030d4`（旧验证镜像，不作为最终交付） |
+| 镜像 ID | `sha256:44d6d7b920333166facc502289f8c594eeafcd50b04b0c6054b606c2b347cac0` |
 | OS/架构 | `linux/amd64` |
 | 默认运行用户 | `nextjs` |
 | 默认模式 | `LLM_MODE=mock` |
@@ -86,7 +86,7 @@ docker inspect llm-toolbox-test
 
 预期结果：容器在 mock 模式正常启动，端口 3000 可访问，容器进程使用 `nextjs` 用户运行。
 
-实际结果：容器成功启动，容器配置显示运行用户为 `nextjs`，未调用真实 Provider API。
+实际结果：最终镜像在宿主机 3001 端口成功启动，容器配置显示运行用户为 `nextjs`，状态为 `running`，未调用真实 Provider API。
 
 ### 4.4 HTTP 验证
 
@@ -101,6 +101,8 @@ Invoke-WebRequest http://localhost:3000
 |---|---|---|---|
 | `GET /api/healthz` | HTTP 200，返回服务健康状态 | HTTP 200 | 通过 |
 | `GET /` | HTTP 200，返回网页内容 | HTTP 200 | 通过 |
+| `GET /api/providers` | HTTP 200，返回 Provider 与模型目录 | HTTP 200 | 通过 |
+| `POST /api/chat` | Mock 非流式聊天返回统一响应 | HTTP 200，返回 `mock response` | 通过 |
 
 ### 4.5 停止测试容器
 
@@ -114,7 +116,25 @@ docker stop llm-toolbox-test
 
 实际结果：容器已停止并清理。
 
-## 5. 测试边界
+## 5. 镜像导出与校验
+
+最终镜像使用 `docker save` 导出：
+
+```powershell
+docker save -o multi-provider-llm-toolbox-stage3-amd64.tar multi-provider-llm-toolbox:phase3
+Get-FileHash .\multi-provider-llm-toolbox-stage3-amd64.tar -Algorithm SHA256
+```
+
+| 属性 | 实际值 |
+|---|---|
+| 交付文件 | `multi-provider-llm-toolbox-stage3-amd64.tar` |
+| 文件大小 | 92,624,384 bytes（88.33 MiB） |
+| SHA-256 | `b41c4a83f29a619862033f47f8ad840c91f5aae4fc58fddbbe64ec2166761d48` |
+| 校验文件 | `multi-provider-llm-toolbox-stage3-amd64.sha256.txt` |
+
+镜像文件和校验文件位于阶段三交付目录。接收方应先核对 SHA-256，再使用 `docker load -i` 导入。
+
+## 6. 测试边界
 
 - DeepSeek 已使用运行时注入密钥完成真实网络烟囱测试；未记录密钥原文。
 - OpenAI、Anthropic、GLM 没有执行真实网络烟囱测试；四个 Provider 的请求/响应转换均通过 mock fetch 契约测试验证。
