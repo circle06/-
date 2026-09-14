@@ -10,9 +10,23 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $serverPath = Join-Path $projectRoot ".next\standalone\server.js"
+$sourceStaticPath = Join-Path $projectRoot ".next\static"
+$standaloneStaticPath = Join-Path $projectRoot ".next\standalone\.next\static"
+$sourcePublicPath = Join-Path $projectRoot "public"
+$standalonePublicPath = Join-Path $projectRoot ".next\standalone\public"
 
 if (-not (Test-Path -LiteralPath $serverPath)) {
   throw "Standalone build not found. Run: npm.cmd run build"
+}
+if (-not (Test-Path -LiteralPath $sourceStaticPath)) {
+  throw "Static build assets not found. Run: npm.cmd run build"
+}
+
+New-Item -ItemType Directory -Path $standaloneStaticPath -Force | Out-Null
+Copy-Item -Path (Join-Path $sourceStaticPath "*") -Destination $standaloneStaticPath -Recurse -Force
+if (Test-Path -LiteralPath $sourcePublicPath) {
+  New-Item -ItemType Directory -Path $standalonePublicPath -Force | Out-Null
+  Copy-Item -Path (Join-Path $sourcePublicPath "*") -Destination $standalonePublicPath -Recurse -Force
 }
 
 $keyEnvironment = switch ($Provider) {

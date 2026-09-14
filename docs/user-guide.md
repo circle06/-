@@ -176,7 +176,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 停止操作会删除临时密钥文件。脚本默认使用 `multi-provider-llm-toolbox:phase3` 镜像。
 
-如果暂时不使用 Docker，可以直接运行已构建的 standalone 源码服务。该脚本只提示输入一次 Provider API Key，不要求输入模型；进入网页后可在当前已配置 Provider 的模型目录中自由切换，不需要 `Ctrl+C` 重启：
+如果暂时不使用 Docker，可以直接运行已构建的 standalone 源码服务。脚本会先同步浏览器所需的静态资源，再提示输入一次 Provider API Key；它不要求输入模型，进入网页后可在当前已配置 Provider 的模型目录中自由切换，不需要 `Ctrl+C` 重启：
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
