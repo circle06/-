@@ -14,21 +14,22 @@
 - 主机或反向代理能够访问容器 3000 端口；
 - live 模式下，容器网络只能访问批准的 Provider HTTPS 地址。
 
-当前阶段三验证环境使用 Node.js 24、Next.js 16.3.4 和 Docker 29.7.2。标签 `multi-provider-llm-toolbox:phase3` 对应的已记录镜像是上一候选；流式协议更新后必须按本文重新构建并覆盖导出文件，新的镜像 ID、大小和校验值以 `docs/test-records.md` 后续记录为准。
+当前阶段三验证环境使用 Node.js 24、Next.js 16.3.4 和 Docker 29.7.2。最终镜像同时提供 `multi-provider-llm-toolbox:stage3-final` 和兼容标签 `multi-provider-llm-toolbox:phase3`；实际镜像 ID、大小和校验值见 `docs/test-records.md`。
 
 ## 3. 构建镜像
 
 在项目根目录执行：
 
 ```powershell
-docker build --platform linux/amd64 -t multi-provider-llm-toolbox:phase3 .
+docker build --pull=false --platform linux/amd64 -t multi-provider-llm-toolbox:stage3-final .
+docker tag multi-provider-llm-toolbox:stage3-final multi-provider-llm-toolbox:phase3
 ```
 
 检查镜像：
 
 ```powershell
-docker image inspect multi-provider-llm-toolbox:phase3
-docker image inspect multi-provider-llm-toolbox:phase3 --format "ID={{.Id}} OS={{.Os}} ARCH={{.Architecture}} USER={{.Config.User}}"
+docker image inspect multi-provider-llm-toolbox:stage3-final
+docker image inspect multi-provider-llm-toolbox:stage3-final --format "ID={{.Id}} OS={{.Os}} ARCH={{.Architecture}} USER={{.Config.User}}"
 ```
 
 应确认：
@@ -48,7 +49,7 @@ Mock 是默认模式。启动命令：
 docker run --rm -d `
   --name llm-toolbox `
   -p 3000:3000 `
-  multi-provider-llm-toolbox:phase3
+  multi-provider-llm-toolbox:stage3-final
 ```
 
 显式指定模式时可增加：
@@ -65,10 +66,10 @@ Mock 模式不应传入任何 Provider API Key。它适合安装验证、页面�
 
 ```powershell
 docker load -i .\multi-provider-llm-toolbox-stage3-amd64.tar
-docker image inspect multi-provider-llm-toolbox:phase3 --format "ID={{.Id}} OS={{.Os}} ARCH={{.Architecture}} USER={{.Config.User}}"
+docker image inspect multi-provider-llm-toolbox:stage3-final --format "ID={{.Id}} OS={{.Os}} ARCH={{.Architecture}} USER={{.Config.User}}"
 ```
 
-将交付文件的 SHA-256 与同目录校验文件进行比对后再导入。镜像应显示 `OS=linux`、`ARCH=amd64`、`USER=nextjs`。
+将交付文件的 SHA-256 与同目录校验文件进行比对后再导入。镜像应显示 `OS=linux`、`ARCH=amd64`、`USER=nextjs`。导入文件同时包含 `stage3-final` 和 `phase3` 两个标签，推荐使用 `stage3-final`。
 
 ## 5. Live 模式与运行时环境变量
 

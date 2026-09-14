@@ -239,7 +239,38 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Docker 脚本会在当前终端安全提示输入密钥，将它写入受限的系统临时文件并以只读文件挂载到容器，不把密钥写入命令历史、项目目录或镜像。停止操作会删除临时密钥文件。脚本默认使用 `multi-provider-llm-toolbox:phase3` 镜像。
 
-### 10.4 使用 `.env.local` 启动 Live
+### 10.4 从交付 tar 导入并启动镜像
+
+在阶段三交付目录先校验文件，再导入镜像：
+
+```powershell
+Set-Location 'D:\E2026.08.29\中国移动\ai coding\阶段三'
+Get-FileHash .\multi-provider-llm-toolbox-stage3-amd64.tar -Algorithm SHA256
+Get-Content .\multi-provider-llm-toolbox-stage3-amd64.sha256.txt
+docker load -i .\multi-provider-llm-toolbox-stage3-amd64.tar
+docker image inspect multi-provider-llm-toolbox:stage3-final --format 'ID={{.Id}} OS={{.Os}} ARCH={{.Architecture}} USER={{.Config.User}}'
+```
+
+校验值必须一致，镜像检查应显示 `OS=linux`、`ARCH=amd64`、`USER=nextjs`。导入后推荐使用 `stage3-final` 标签。
+
+不调用真实接口的 Mock 启动：
+
+```powershell
+docker run --rm -d `
+  --name llm-toolbox `
+  -p 3000:3000 `
+  multi-provider-llm-toolbox:stage3-final
+```
+
+浏览器访问 `http://127.0.0.1:3000`。停止：
+
+```powershell
+docker stop llm-toolbox
+```
+
+真实 Live 模式仍应回到项目根目录使用 `run-live.ps1`，按 10.3 节选择正确的 `-Provider` 并安全输入相应厂商的 Key。
+
+### 10.5 使用 `.env.local` 启动 Live
 
 直接从源码运行时，也可以使用仅保存在本机且被 Git 忽略的 `.env.local`：
 

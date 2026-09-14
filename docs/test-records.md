@@ -49,17 +49,18 @@
 执行命令：
 
 ```powershell
-docker build --platform linux/amd64 -t multi-provider-llm-toolbox:phase3 .
+docker build --pull=false --platform linux/amd64 -t multi-provider-llm-toolbox:stage3-final .
+docker tag multi-provider-llm-toolbox:stage3-final multi-provider-llm-toolbox:phase3
 ```
 
 预期结果：多阶段构建成功，生成 Linux/amd64 镜像；构建上下文不包含 `.env`、Git 数据、宿主机 `node_modules` 或测试缓存。
 
-历史结果：基于 Commit `32ad2a5` 构建的上一候选镜像成功。2026-09-10 流式协议更新后需重新构建，旧镜像不代表当前源码。
+实际结果：2026-09-14 基于 Commit `7fae742` 构建成功，包含最终多轮推理流、Live 启动修复、Provider/模型切换和用户手册更新。
 
 | 属性 | 实际值 |
 |---|---|
-| 镜像名称 | `multi-provider-llm-toolbox:phase3` |
-| 上一候选镜像 ID | `sha256:44d6d7b920333166facc502289f8c594eeafcd50b04b0c6054b606c2b347cac0` |
+| 镜像名称 | `multi-provider-llm-toolbox:stage3-final`、`multi-provider-llm-toolbox:phase3` |
+| 最终镜像 ID | `sha256:5e3e86b78a5c64f8a474e42908204dc1d1be3648be9eced2ff43d7cb8f849569` |
 | OS/架构 | `linux/amd64` |
 | 默认运行用户 | `nextjs` |
 | 默认模式 | `LLM_MODE=mock` |
@@ -88,7 +89,7 @@ docker inspect llm-toolbox-test
 
 预期结果：容器在 mock 模式正常启动，端口 3000 可访问，容器进程使用 `nextjs` 用户运行。
 
-历史结果：上一候选镜像在宿主机 3001 端口成功启动，容器配置显示运行用户为 `nextjs`，状态为 `running`，未调用真实 Provider API。
+实际结果：最终镜像以 `stage3-final` 标签在宿主机 3015 端口成功启动，容器配置显示运行用户为 `nextjs`、状态为 `running`，默认使用 Mock 模式且未调用真实 Provider API。
 
 ### 4.4 HTTP 验证
 
@@ -120,18 +121,18 @@ docker stop llm-toolbox-test
 
 ## 5. 镜像导出与校验
 
-上一候选镜像曾使用 `docker save` 导出；本次更新后需用同一命令覆盖：
+最终镜像同时保留 `stage3-final` 和兼容标签 `phase3`，并使用以下命令导出：
 
 ```powershell
-docker save -o multi-provider-llm-toolbox-stage3-amd64.tar multi-provider-llm-toolbox:phase3
+docker save -o multi-provider-llm-toolbox-stage3-amd64.tar multi-provider-llm-toolbox:stage3-final multi-provider-llm-toolbox:phase3
 Get-FileHash .\multi-provider-llm-toolbox-stage3-amd64.tar -Algorithm SHA256
 ```
 
 | 属性 | 实际值 |
 |---|---|
 | 交付文件 | `multi-provider-llm-toolbox-stage3-amd64.tar` |
-| 文件大小 | 92,624,384 bytes（88.33 MiB） |
-| SHA-256 | `b41c4a83f29a619862033f47f8ad840c91f5aae4fc58fddbbe64ec2166761d48` |
+| 文件大小 | 92,626,432 bytes（88.34 MiB） |
+| SHA-256 | `dc46527f74651bb1c71cfe2ad5161ede918390bc05451c099b1d561e6a8574b7` |
 | 校验文件 | `multi-provider-llm-toolbox-stage3-amd64.sha256.txt` |
 
 镜像文件和校验文件位于阶段三交付目录。接收方应先核对 SHA-256，再使用 `docker load -i` 导入。
