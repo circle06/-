@@ -22,7 +22,7 @@ $keyEnvironment = switch ($Provider) {
   "glm" { "GLM_API_KEY" }
 }
 
-$secureKey = Read-Host "请输入 $Provider API Key" -AsSecureString
+$secureKey = Read-Host "Enter $Provider API Key" -AsSecureString
 $credential = [System.Net.NetworkCredential]::new("", $secureKey)
 $plainKey = $credential.Password
 if ([string]::IsNullOrWhiteSpace($plainKey)) { throw "API Key cannot be empty." }
@@ -38,10 +38,10 @@ try {
   [Environment]::SetEnvironmentVariable("HOSTNAME", "0.0.0.0", "Process")
   [Environment]::SetEnvironmentVariable($keyEnvironment, $plainKey, "Process")
 
-  Write-Host "Live 源码服务启动中: http://localhost:$Port"
+  Write-Host "Live source server: http://localhost:$Port"
   Write-Host "Provider: $Provider"
-  Write-Host "模型请在网页中选择；切换模型无需重启服务。"
-  Write-Host "测试结束请按 Ctrl+C。密钥仅保存在当前进程环境，不写入项目文件。"
+  Write-Host "Select the model in the web UI; changing models does not require a restart."
+  Write-Host "Press Ctrl+C when finished. The key is held only in this process and is not written to the project."
 
   & node $serverPath
   if ($LASTEXITCODE -ne 0) { throw "Live server exited with code $LASTEXITCODE." }
