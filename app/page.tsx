@@ -115,6 +115,8 @@ export default function HomePage() {
   const messageListRef = useRef<HTMLElement | null>(null);
 
   const selectedProvider = providers.find((provider) => provider.id === providerId);
+  const configuredProviders = runtimeMode === "live" ? providers.filter((provider) => provider.configured) : providers;
+  const providerOptions = configuredProviders.length > 0 ? configuredProviders : providers;
 
   function storeSessions(nextSessions: LocalChatSession[]) {
     sessionsRef.current = nextSessions;
@@ -192,14 +194,16 @@ export default function HomePage() {
         setRuntimeMode(body.mode === "live" ? "live" : "mock");
         const available = Array.isArray(body.providers) ? body.providers : [];
         setProviders(available);
-        const fallbackProvider = available[0];
+        const selectable = body.mode === "live" ? available.filter((provider) => provider.configured) : available;
+        const sessionProviders = selectable.length > 0 ? selectable : available;
+        const fallbackProvider = sessionProviders[0];
         if (!fallbackProvider) return;
 
         let stored: LocalChatSession[] = [];
         try { stored = loadChatSessions(window.localStorage); }
         catch { setError("浏览器本地会话读取失败。"); }
         const normalized = stored.map((session) => {
-          const provider = available.find((item) => item.id === session.provider) ?? fallbackProvider;
+          const provider = sessionProviders.find((item) => item.id === session.provider) ?? fallbackProvider;
           const model = provider.models.find((item) => item.id === session.model) ?? provider.models[0];
           return { ...session, provider: provider.id, model: model?.id ?? "" };
         });
@@ -573,7 +577,7 @@ export default function HomePage() {
           <div className={styles.notificationArea}>
             {!settingsValid && <p className={styles.alert} role="alert">Temperature 必须在 0–2 之间，max_tokens 必须是 1–32768 的整数。</p>}
             {loadingProviders && <p className={styles.statusMessage} role="status">正在加载模型服务…</p>}
-            {runtimeMode === "live" && selectedProvider && !selectedProvider.configured && <p className={styles.alert} role="alert">当前 Provider 未配置密钥，请使用安全启动脚本切换。</p>}
+            {runtimeMode === "live" && selectedProvider && !selectedProvider.configured && <p className={styles.alert} role="alert">当前没有可用密钥。请用安全启动脚本配置一个 Provider；配置后可在这里直接切换该 Provider 下的模型，无需重启。</p>}
             {error && <p className={styles.alert} role="alert">{error}</p>}
           </div>
 
@@ -658,7 +662,7 @@ export default function HomePage() {
               </div>
               <div className={styles.composerActions}>
                 <select className={styles.inlineSelect} aria-label="服务商" value={providerId} onChange={(event) => changeProvider(event.target.value)} disabled={loadingProviders || loading}>
-                  {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
+                  {providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
                 </select>
                 <select className={`${styles.inlineSelect} ${styles.inlineModelSelect}`} aria-label="模型" value={modelId} onChange={(event) => changeModel(event.target.value)} disabled={!selectedProvider || loading}>
                   {selectedProvider?.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}

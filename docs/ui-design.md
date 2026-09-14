@@ -34,7 +34,7 @@
 
 - Provider 与模型选择位于输入栏右侧，Provider 变化时自动选择其第一个模型。
 - 高级设置折叠展示 temperature 和 max_tokens。
-- Mock/Live 状态固定在顶部；Live 模式下未配置的 Provider 禁止发送并显示提示。
+- Mock/Live 状态固定在顶部；Live 模式优先只展示已配置密钥的 Provider，当前 Provider 下可直接切换模型，无需重启服务。
 - 页面不出现 API Key 和 `baseUrl` 输入控件。
 
 ### 本地文档

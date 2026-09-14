@@ -103,4 +103,5 @@ try {
 
 Write-Host "Live mode started: http://localhost:$Port"
 Write-Host "Provider configured: $Provider"
+Write-Host "Choose the model in the web UI; changing models does not require restarting the container."
 Write-Host "Stop safely with: .\run-live.ps1 -Action stop"

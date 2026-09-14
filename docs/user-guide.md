@@ -176,6 +176,15 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 停止操作会删除临时密钥文件。脚本默认使用 `multi-provider-llm-toolbox:phase3` 镜像。
 
+如果暂时不使用 Docker，可以直接运行已构建的 standalone 源码服务。该脚本只提示输入一次 Provider API Key，不要求输入模型；进入网页后可在当前已配置 Provider 的模型目录中自由切换，不需要 `Ctrl+C` 重启：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\run-live-local.ps1 -Provider deepseek -Port 3000
+```
+
+脚本只在当前 PowerShell 进程中临时设置密钥，并在服务退出后恢复原环境变量，不会把密钥写入项目文件、Git 或命令行参数。
+
 直接从源码运行时，也可以使用仅保存在本机且被 Git 忽略的 `.env.local`：
 
 将 `.env.local` 中的模式改为：
