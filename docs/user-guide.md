@@ -47,7 +47,17 @@ Copy-Item .env.example .env.local
 
 ## 4. Mock 模式启动与使用
 
-Mock 是默认运行模式，不需要任何 Provider API Key。确认 `.env.local` 包含：
+Mock 是默认运行模式，不需要任何 Provider API Key，不访问真实模型接口，也不会产生模型调用费用。它用于页面演示、功能检查和自动化测试；即使页面选择了 OpenAI、Anthropic、DeepSeek 或 GLM，返回的仍然是本地模拟结果。
+
+PowerShell 推荐启动命令：
+
+```powershell
+Set-Location 'D:\E2026.08.29\中国移动\ai coding\项目主体'
+$env:LLM_MODE = 'mock'
+npm.cmd run dev
+```
+
+也可以确认 `.env.local` 包含：
 
 ```dotenv
 LLM_MODE=mock
@@ -57,19 +67,14 @@ DEEPSEEK_API_KEY=
 GLM_API_KEY=
 ```
 
-启动开发服务器：
-
-```powershell
-npm run dev
-```
-
 打开终端显示的地址，通常为 `http://localhost:3000`。选择任意 Provider 和对应模型后发送消息，Mock Provider 会返回固定的模拟内容，用于验证页面、流式事件、会话和错误处理，不会访问真实上游接口。
 
 生产方式的本地启动流程：
 
 ```powershell
-npm run build
-npm start
+npm.cmd run build
+$env:LLM_MODE = 'mock'
+npm.cmd start
 ```
 
 Windows PowerShell 如果因执行策略阻止 `npm.ps1`，可以将上述命令中的 `npm` 改为 `npm.cmd`，无需修改永久执行策略。
@@ -158,32 +163,83 @@ Assistant 消息支持代码块、基础表格、标题、列表、粗体和行�
 
 ## 10. 运行状态与 Live 模式
 
-页面会显示当前是 Mock 还是 Live 模式，并标明各 Provider 是否已配置。Mock 模式下所有 Provider 用于界面演示；Live 模式只有安全注入了密钥的 Provider 才能调用真实上游。
+页面会显示当前是 Mock 还是 Live 模式，并标明各 Provider 是否已配置。两种模式的区别如下：
+
+| 模式 | 是否需要 API Key | 是否访问真实上游 | 页面行为 | 适用场景 |
+|---|---|---|---|---|
+| Mock | 不需要 | 否 | 四个 Provider 均可选择，返回模拟结果 | 页面演示、功能验证、自动化测试 |
+| Live | 需要对应厂商的真实 Key | 是 | 优先只显示已经配置密钥的 Provider，产生真实请求并可能产生费用 | 真实接口验收、本地受控使用 |
+
+“源码启动”和“Docker 启动”是两种运行方式，不是另外两种模型模式；二者都可以运行 Live，但必须安全注入正确厂商的 Key。
+
+### 10.1 `-Provider` 参数规则
+
+Live 启动时建议始终显式填写 `-Provider`。其后填写的是 **Provider 厂商标识**，不是具体模型名称：
+
+| 厂商 | `-Provider` 参数 | 所需密钥 |
+|---|---|---|
+| OpenAI | `openai` | OpenAI API Key |
+| Anthropic / Claude | `anthropic` | Anthropic API Key |
+| DeepSeek | `deepseek` | DeepSeek API Key |
+| GLM / 智谱 | `glm` | 智谱开放平台 API Key |
+
+例如，`-Provider deepseek` 表示接下来输入的是 DeepSeek Key。它不会锁定某一个 DeepSeek 模型；服务启动后，具体模型在网页输入栏右下角选择，切换同一 Provider 下的模型不需要重启。不同厂商的 Key 不能混用，例如 DeepSeek Key 不能调用 GLM。
+
+### 10.2 不使用 Docker：Live 源码启动
+
+首次运行或源码变化后先构建：
+
+```powershell
+Set-Location 'D:\E2026.08.29\中国移动\ai coding\项目主体'
+npm.cmd run build
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+根据 Key 所属厂商选择且只执行下面一条启动命令：
+
+```powershell
+# OpenAI
+.\run-live-local.ps1 -Provider openai -Port 3000
+
+# Anthropic / Claude
+.\run-live-local.ps1 -Provider anthropic -Port 3000
+
+# DeepSeek
+.\run-live-local.ps1 -Provider deepseek -Port 3000
+
+# GLM / 智谱
+.\run-live-local.ps1 -Provider glm -Port 3000
+```
+
+脚本随后通过安全输入框读取对应 API Key。服务运行期间保持该 PowerShell 窗口开启；测试结束按 `Ctrl+C`。脚本会同步 standalone 所需静态资源，密钥只存在于当前进程环境，不写入项目文件、Git 或命令参数。
+
+### 10.3 使用 Docker：Live 容器启动
 
 Live 模式会调用真实 Provider Adapter。只在受控的服务端环境中配置密钥，不要在浏览器、URL、日志或 Git 中保存密钥。Docker 本地测试推荐使用项目根目录的安全启动脚本：
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+# OpenAI
+.\run-live.ps1 -Provider openai -Action start -Port 3000
+
+# Anthropic / Claude
+.\run-live.ps1 -Provider anthropic -Action start -Port 3000
+
+# DeepSeek
 .\run-live.ps1 -Provider deepseek -Action start -Port 3000
-```
 
-脚本会在当前终端安全提示输入密钥，将它写入受限的系统临时文件并以只读文件挂载到容器，不把密钥写入命令历史、项目目录或镜像。替换 `deepseek` 可选择 `openai`、`anthropic` 或 `glm`。查看和停止：
+# GLM / 智谱
+.\run-live.ps1 -Provider glm -Action start -Port 3000
 
-```powershell
+# 查看或停止容器
 .\run-live.ps1 -Action status
 .\run-live.ps1 -Action stop
 ```
 
-停止操作会删除临时密钥文件。脚本默认使用 `multi-provider-llm-toolbox:phase3` 镜像。
+Docker 脚本会在当前终端安全提示输入密钥，将它写入受限的系统临时文件并以只读文件挂载到容器，不把密钥写入命令历史、项目目录或镜像。停止操作会删除临时密钥文件。脚本默认使用 `multi-provider-llm-toolbox:phase3` 镜像。
 
-如果暂时不使用 Docker，可以直接运行已构建的 standalone 源码服务。脚本会先同步浏览器所需的静态资源，再提示输入一次 Provider API Key；它不要求输入模型，进入网页后可在当前已配置 Provider 的模型目录中自由切换，不需要 `Ctrl+C` 重启：
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\run-live-local.ps1 -Provider deepseek -Port 3000
-```
-
-脚本只在当前 PowerShell 进程中临时设置密钥，并在服务退出后恢复原环境变量，不会把密钥写入项目文件、Git 或命令行参数。
+### 10.4 使用 `.env.local` 启动 Live
 
 直接从源码运行时，也可以使用仅保存在本机且被 Git 忽略的 `.env.local`：
 
